@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#0f0f11" />
+<title>FF14 天書奇談模擬器 (Wondrous Tails Solver)</title>
+<meta name="description" content="FFXIV 天書奇談（Wondrous Tails）模擬器 — 連線機率、潛在連線、重新貼建議、目標策略切換,支援 PWA 離線使用。" />
+<link rel="manifest" href="./manifest.json" />
+<link rel="apple-touch-icon" href="./icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  html, body { background:#0f0f11; color:#e8e3d6; }
+  body { font-family: -apple-system, "Segoe UI", "Noto Sans TC", system-ui, sans-serif; }
+  .gold { color:#d6b56b; }
+  .panel { background:#1a1a1f; border:1px solid #2c2c33; }
+  .cell {
+    aspect-ratio:1/1; border:1px solid #2c2c33; background:#15151a;
+    display:flex; align-items:center; justify-content:center;
+    user-select:none; -webkit-tap-highlight-color:transparent;
+    transition: transform .08s ease, background .12s ease;
+    font-size: clamp(20px, 6vw, 36px);
+  }
+  .cell:active { transform: scale(0.94); }
+  .cell.on { background:linear-gradient(135deg,#3a2c12,#5a4220); border-color:#d6b56b; color:#fff; }
+  .cell.line-hit { box-shadow: inset 0 0 0 2px #d6b56b; }
+  .btn { background:#1a1a1f; border:1px solid #2c2c33; color:#e8e3d6; }
+  .btn-primary { background:linear-gradient(135deg,#d6b56b,#a8884a); color:#1a1a1f; border:none; font-weight:600; }
+  .btn-primary:disabled { opacity:.4; }
+  .chip-active { background:linear-gradient(135deg,#d6b56b,#a8884a); color:#1a1a1f; font-weight:600; border:none; }
+  .chip-idle { background:#1a1a1f; border:1px solid #2c2c33; color:#e8e3d6; opacity:.75; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="env,react">
+const { useState, useMemo, useEffect, useCallback } = React;
+
+/* ────────── 棋盤 / 連線定義 ────────── */
+const LINES = (() => {
+  const L = [];
+  for (let r = 0; r < 4; r++) L.push([0,1,2,3].map(c => r*4+c));
+  for (let c = 0; c < 4; c++) L.push([0,1,2,3].map(r => r*4+c));
+  L.push([0,5,10,15]);
+  L.push([3,6,9,12]);
+  return L;
+})();
+
+function completedLines(stamped) {
+  const out = [];
+  for (let i = 0; i < LINES.length; i++) {
+    if (LINES[i].every(idx => stamped.has(idx))) out.push(i);
+  }
+  return out;
+}
+
+function* combinations(arr, k) {
+  const n = arr.length;
+  if (k > n) return;
+  const idx = Array.from({length:k},(_,i)=>i);
+  while (true) {
+    yield idx.map(i => arr[i]);
+    let i = k - 1;
+    while (i >= 0 && idx[i] === i + n - k) i--;
+    if (i < 0) return;
+    idx[i]++;
+    for (let j = i + 1; j < k; j++) idx[j] = idx[j-1] + 1;
+  }
+}
+
+function expectedDistribution(stamped) {
+  const dist = {0:0,1:0,2:0,3:0};
+  const need = 9 - stamped.size;
+  if (need < 0) return { error: '印章超過 9 個', dist };
+  if (need === 0) {
+    const n = Math.min(completedLines(stamped).length, 3);
+    dist[n] = 1;
+    return { dist, total: 1 };
+  }
+  const empty = [];
+  for (let i = 0; i < 16; i++) if (!stamped.has(i)) empty.push(i);
+  let total = 0;
+  for (const combo of combinations(empty, need)) {
+    const full = new Set(stamped);
+    for (const c of combo) full.add(c);
+    const n = Math.min(completedLines(full).length, 3);
+    dist[n]++;
+    total++;
+  }
+  for (const k of [0,1,2,3]) dist[k] = dist[k] / total;
+  return { dist, total };
+}
+
+function potentialLines(stamped) {
+  const need = 9 - stamped.size;
+  if (need <= 0) return completedLines(stamped).length;
+  const empty = [];
+  for (let i = 0; i < 16; i++) if (!stamped.has(i)) empty.push(i);
+  let best = completedLines(stamped).length;
+  for (const combo of combinations(empty, need)) {
+    const full = new Set(stamped);
+    for (const c of combo) full.add(c);
+    const n = completedLines(full).length;
+    if (n > best) best = n;
+    if (best >= 3) break;
+  }
+  return Math.min(best, 3);
+}
+
+const RESHUFFLE_DIST = { 0: 4752/11440, 1: 5480/11440, 2: 1184/11440, 3: 24/11440 };
+
+function expectedScore(dist) {
+  return 0*dist[0] + 1*dist[1] + 2*dist[2] + 3*dist[3];
+}
+
+/* 累積機率: ≥1 / ≥2 / =3 */
+function cumulative(dist) {
+  return {
+    ge1: dist[1] + dist[2] + dist[3],
+    ge2: dist[2] + dist[3],
+    eq3: dist[3],
+  };
+}
+
+/* ────────── 目標策略 ────────── */
+const STRATEGIES = {
+  balanced: { label: '平衡',   desc: '加權期望線數',   metric: 'expected' },
+  bronze:   { label: '銅 ≥1', desc: '至少 1 線機率',  metric: 'ge1' },
+  silver:   { label: '銀 ≥2', desc: '至少 2 線機率',  metric: 'ge2' },
+  gold:     { label: '金 = 3','desc': '正好 3 線機率',  metric: 'eq3' },
+};
+
+function metricValue(dist, strategy) {
+  if (strategy === 'balanced') return expectedScore(dist);
+  if (strategy === 'bronze')   return dist[1] + dist[2] + dist[3];
+  if (strategy === 'silver')   return dist[2] + dist[3];
+  if (strategy === 'gold')     return dist[3];
+  return 0;
+}
+
+function fmtMetric(v, strategy) {
+  if (strategy === 'balanced') return v.toFixed(3) + ' 線';
+  return (v*100).toFixed(2) + '%';
+}
+
+function suggestion(stampCount, currentLines, potential, dist, strategy) {
+  if (stampCount < 3) return { kind:'na', text:'再點 ' + (3 - stampCount) + ' 個印章才能重新貼' };
+  if (stampCount > 7) return { kind:'na', text:'印章超過 7,已無法重新貼' };
+
+  const cur  = metricValue(dist, strategy);
+  const base = metricValue(RESHUFFLE_DIST, strategy);
+  const delta = base - cur;
+
+  /* 已達策略目標 → 別動 */
+  if (strategy === 'bronze' && currentLines >= 1)
+    return { kind:'bad', text:'已達銅賞,不要重新貼', detail:'保留現況 ' + fmtMetric(cur, strategy) };
+  if (strategy === 'silver' && currentLines >= 2)
+    return { kind:'bad', text:'已達銀賞,不要重新貼', detail:'保留現況 ' + fmtMetric(cur, strategy) };
+  if (strategy === 'gold' && currentLines >= 3)
+    return { kind:'bad', text:'已達金賞!別亂動', detail:'你已 3 線' };
+
+  /* 衝金: 看潛在 */
+  if (strategy === 'gold') {
+    if (potential >= 3 && cur > base)
+      return { kind:'bad', text:'仍有 3 線機會,不要重新貼', detail:'你 ' + fmtMetric(cur, strategy) + ' > 重新貼 ' + fmtMetric(base, strategy) };
+    if (potential < 3)
+      return { kind:'good', text:'已無 3 線可能,重新貼搏 0.21%', detail:'重新貼 P(3) = ' + fmtMetric(base, strategy) };
+    return { kind:'mid', text:'看情況', detail:'你 ' + fmtMetric(cur, strategy) + ' / 重新貼 ' + fmtMetric(base, strategy) };
+  }
+
+  /* 平衡 (沿用原邏輯,加 7 印章決策法味道) */
+  if (strategy === 'balanced') {
+    if (currentLines >= 1)
+      return { kind:'bad', text:'已有連線,不要重新貼', detail:'你 ' + fmtMetric(cur, strategy) + ' / 重新貼 ' + fmtMetric(base, strategy) };
+    if (potential >= 3)
+      return { kind:'bad', text:'潛在 3 線,絕對不要重新貼', detail:'重新貼會大幅變差' };
+    if (potential <= 1)
+      return { kind:'good', text:'潛在 ≤1 線,建議重新貼', detail:'期望 +' + delta.toFixed(3) + ' 線' };
+    if (delta > 0.05)
+      return { kind:'good', text:'重新貼略佳,可貼', detail:'期望 +' + delta.toFixed(3) + ' 線' };
+    if (delta < -0.05)
+      return { kind:'bad', text:'重新貼略差,不要貼', detail:'期望 ' + delta.toFixed(3) + ' 線' };
+    return { kind:'mid', text:'差不多,看心情', detail:'期望差 ' + Math.abs(delta).toFixed(3) + ' 線' };
+  }
+
+  /* 銅 / 銀: 比 cur vs base 的百分比 */
+  const sig = 0.03;
+  if (delta > sig)
+    return { kind:'good', text:'重新貼較佳,建議貼', detail:'+' + (delta*100).toFixed(2) + '% (' + STRATEGIES[strategy].desc + ')' };
+  if (delta < -sig)
+    return { kind:'bad', text:'你的盤面較佳,不要貼', detail:(delta*100).toFixed(2) + '% (' + STRATEGIES[strategy].desc + ')' };
+  return { kind:'mid', text:'差不多,看情況', detail:'差 ' + (Math.abs(delta)*100).toFixed(2) + '%' };
+}
+
+/* ────────── React UI ────────── */
+function App() {
+  const [stamps, setStamps]     = useState(() => new Set());
+  const [history, setHistory]   = useState([]);   // past states for undo
+  const [future, setFuture]     = useState([]);   // future states for redo
+  const [showLines, setShowLines]       = useState(true);
+  const [showStrategy, setShowStrategy] = useState(true);
+  const [strategy, setStrategy] = useState('balanced');
+
+  const stampCount = stamps.size;
+  const lines      = useMemo(() => completedLines(stamps), [stamps]);
+  const potential  = useMemo(() => potentialLines(stamps), [stamps]);
+  const exp        = useMemo(() => expectedDistribution(stamps), [stamps]);
+  const cum        = useMemo(() => cumulative(exp.dist), [exp]);
+  const cumBase    = useMemo(() => cumulative(RESHUFFLE_DIST), []);
+  const advice     = useMemo(
+    () => suggestion(stampCount, lines.length, potential, exp.dist, strategy),
+    [stampCount, lines, potential, exp, strategy]
+  );
+  const expectedLines = useMemo(() => expectedScore(exp.dist), [exp]);
+
+  const lineCells = useMemo(() => {
+    if (!showLines) return new Set();
+    const s = new Set();
+    for (const li of lines) for (const i of LINES[li]) s.add(i);
+    return s;
+  }, [lines, showLines]);
+
+  const setWithHistory = useCallback((newStamps) => {
+    setHistory(h => [...h, new Set(stamps)]);
+    setFuture([]);
+    setStamps(newStamps);
+  }, [stamps]);
+
+  const undo = useCallback(() => {
+    if (history.length === 0) return;
+    const prev = history[history.length - 1];
+    setHistory(h => h.slice(0, -1));
+    setFuture(f => [new Set(stamps), ...f]);
+    setStamps(prev);
+  }, [history, stamps]);
+
+  const redo = useCallback(() => {
+    if (future.length === 0) return;
+    const next = future[0];
+    setFuture(f => f.slice(1));
+    setHistory(h => [...h, new Set(stamps)]);
+    setStamps(next);
+  }, [future, stamps]);
+
+  /* 鍵盤: Ctrl/Cmd + Z = undo, Ctrl/Cmd + Shift + Z 或 Ctrl + Y = redo */
+  useEffect(() => {
+    function onKey(e) {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if (mod && ((e.key === 'z' || e.key === 'Z') && e.shiftKey)) { e.preventDefault(); redo(); }
+      else if (mod && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); redo(); }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
+
+  function toggle(i) {
+    const next = new Set(stamps);
+    if (next.has(i)) next.delete(i);
+    else { if (next.size >= 9) return; next.add(i); }
+    setWithHistory(next);
+  }
+
+  function reset()      { setWithHistory(new Set()); }
+  function randomFill() {
+    const all = Array.from({length:16},(_,i)=>i);
+    for (let i = all.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [all[i], all[j]] = [all[j], all[i]];
+    }
+    setWithHistory(new Set(all.slice(0, 9)));
+  }
+  function reshuffle() {
+    if (stampCount < 3 || stampCount > 7) return;
+    randomFill();
+  }
+
+  return (
+    <div className="min-h-screen px-4 py-6 max-w-xl mx-auto">
+      <header className="text-center mb-5">
+        <h1 className="text-2xl font-semibold tracking-wider gold">天書奇談模擬器</h1>
+        <p className="text-xs opacity-60 mt-1">Wondrous Tails Solver · 連線機率 / 重新貼建議 / 目標策略</p>
+      </header>
+
+      {/* 棋盤 */}
+      <div className="panel rounded-2xl p-3 mb-4">
+        <div className="flex items-center justify-between mb-2 text-sm">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={undo}
+              disabled={history.length===0}
+              className="px-2 py-1 rounded disabled:opacity-30 hover:bg-white/5"
+              title="復原 (Ctrl+Z)"
+              aria-label="復原"
+            >↶</button>
+            <button
+              onClick={redo}
+              disabled={future.length===0}
+              className="px-2 py-1 rounded disabled:opacity-30 hover:bg-white/5"
+              title="重做 (Ctrl+Y / Ctrl+Shift+Z)"
+              aria-label="重做"
+            >↷</button>
+          </div>
+          <span className="opacity-70">印章 <span className={'font-semibold ' + (stampCount>=3 && stampCount<=7 ? 'text-green-400' : 'text-red-400')}>{stampCount}</span> / 9 <span className={'ml-1 text-[10px] ' + (stampCount>=3 && stampCount<=7 ? 'text-green-400/80' : 'text-red-400/80')}>{stampCount>=3 && stampCount<=7 ? '可重新貼' : (stampCount<3 ? '不可重新貼 (需 3+)' : '不可重新貼 (>7)')}</span></span>
+          <label className="flex items-center gap-1 opacity-70 text-xs">
+            <input type="checkbox" checked={showLines} onChange={e=>setShowLines(e.target.checked)} />
+            高亮
+          </label>
+        </div>
+        <div className="grid grid-cols-4 gap-1.5">
+          {Array.from({length:16},(_,i)=>(
+            <button
+              key={i}
+              className={'cell rounded-lg ' + (stamps.has(i)?'on ':'') + (lineCells.has(i)?'line-hit':'')}
+              onClick={()=>toggle(i)}
+              aria-label={'格子 ' + (i+1)}
+            >{stamps.has(i)?'✦':''}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* 重新貼建議 (動態,跟著策略走) — 緊貼棋盤,讓決策最顯眼 */}
+      <div className={
+        'panel rounded-2xl p-4 mb-4 border-l-4 ' + (
+          advice.kind==='good' ? 'border-green-500/70' :
+          advice.kind==='bad'  ? 'border-red-500/70'   :
+          advice.kind==='mid'  ? 'border-yellow-500/70':
+                                 'border-white/10'
+        )
+      }>
+        <div className="text-xs opacity-60 mb-1">
+          重新貼建議 <span className="opacity-50">· 策略: {STRATEGIES[strategy].label}</span>
+        </div>
+        <div className="text-lg font-semibold mb-1">
+          <span className={
+            advice.kind==='good' ? 'text-green-400' :
+            advice.kind==='bad'  ? 'text-red-400'   :
+            advice.kind==='mid'  ? 'text-yellow-300':
+                                   'opacity-80'
+          }>{advice.text}</span>
+        </div>
+        {advice.detail && <div className="text-xs opacity-60">{advice.detail}</div>}
+      </div>
+
+      {/* 統計 */}
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <Stat label="目前連線" value={lines.length} />
+        <Stat label="潛在連線" value={potential} hint="最佳情況" />
+        <Stat label="期望線數" value={expectedLines.toFixed(2)} hint="加權平均" />
+      </div>
+
+      {/* 目標策略 */}
+      <div className="mb-4">
+        <div className="text-xs opacity-60 mb-1.5 text-center">目標策略</div>
+        <div className="grid grid-cols-4 gap-1.5">
+          {Object.entries(STRATEGIES).map(([key, s]) => (
+            <button
+              key={key}
+              onClick={()=>setStrategy(key)}
+              className={'rounded-lg py-2 text-xs ' + (strategy===key ? 'chip-active' : 'chip-idle')}
+              title={s.desc}
+            >{s.label}</button>
+          ))}
+        </div>
+        <div className="text-center text-[10px] opacity-50 mt-1.5">{STRATEGIES[strategy].desc}</div>
+      </div>
+
+      {/* 機率 — 左右並排,你的天書帶 ±% 偏差 */}
+      <div className="mb-4">
+        <h2 className="text-center font-semibold gold mb-3">完成機率</h2>
+        <div className="grid grid-cols-2 gap-2">
+          <ProbCard title="你的天書" dist={exp.dist} baseline={RESHUFFLE_DIST} active />
+          <ProbCard title="平均值" subtitle="(重新貼後)" dist={RESHUFFLE_DIST} />
+        </div>
+        <div className="text-center text-[11px] opacity-50 mt-2">
+          假設剩下印章隨機分配 · 數字後 +/- 為與重新貼基準的差
+        </div>
+      </div>
+
+      {/* 累積機率 (≥1 / ≥2 / 3 線) */}
+      <div className="mb-4">
+        <h2 className="text-center font-semibold gold mb-2 text-sm">至少 N 線(累積機率)</h2>
+        <div className="grid grid-cols-3 gap-2">
+          <CumChip label="≥ 1 線" cur={cum.ge1} base={cumBase.ge1} reward="銅" />
+          <CumChip label="≥ 2 線" cur={cum.ge2} base={cumBase.ge2} reward="銀" />
+          <CumChip label="3 線"   cur={cum.eq3} base={cumBase.eq3} reward="金" highlight />
+        </div>
+      </div>
+
+      {/* 7 印章決策法 (可摺疊) */}
+      <div className="panel rounded-2xl mb-4">
+        <button
+          onClick={()=>setShowStrategy(s=>!s)}
+          className="flex items-center gap-2 w-full text-left p-4 font-semibold gold"
+        >
+          <span className={'inline-block transition-transform text-xs ' + (showStrategy?'':'-rotate-90')}>▼</span>
+          最佳策略(7 印章決策法)
+        </button>
+        {showStrategy && (
+          <div className="px-4 pb-4">
+            <p className="text-sm opacity-80 mb-3">
+              根據社群研究,最佳決策點在 <span className="gold font-bold">7 個印章</span> 時(平衡策略下):
+            </p>
+            <div className="overflow-x-auto -mx-1 mb-4">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr>
+                    <th className="p-2 bg-white/5 border border-white/10 font-normal opacity-70 text-left">狀態</th>
+                    <th className="p-2 bg-white/5 border border-white/10 font-normal opacity-70">潛在 1 線</th>
+                    <th className="p-2 bg-white/5 border border-white/10 font-normal opacity-70">潛在 2 線</th>
+                    <th className="p-2 bg-white/5 border border-white/10 font-normal opacity-70">潛在 3 線</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="p-2 border border-white/10 opacity-80">0 條已連線</td>
+                    <td className="p-2 border border-white/10 text-center bg-green-900/30 text-green-300">重新貼</td>
+                    <td className="p-2 border border-white/10 text-center bg-yellow-900/30 text-yellow-300">看情況</td>
+                    <td className="p-2 border border-white/10 text-center opacity-60">不要貼</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 border border-white/10 opacity-80">1+ 條已連線</td>
+                    <td className="p-2 border border-white/10 text-center opacity-40">—</td>
+                    <td className="p-2 border border-white/10 text-center opacity-60">不要貼</td>
+                    <td className="p-2 border border-white/10 text-center opacity-60">不要貼</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <ul className="text-sm opacity-80 space-y-1.5 pl-5 list-disc">
+              <li><span className="gold font-semibold">潛在連線</span> = 剩餘印章最佳放置能達成的最大連線數</li>
+              <li>潛在 1 線(棋盤格)→ 必定重新貼(<span className="text-green-400">89% 改善</span>)</li>
+              <li>潛在 3 線 → 絕對不要重新貼(<span className="text-red-400">93%+ 變差</span>)</li>
+              <li>已有連線 → 不要重新貼(<span className="text-red-400">79% 變差</span>)</li>
+              <li>潛在 2 線 → 可考慮重新貼(<span className="text-green-400">21% 變好</span>、<span className="text-red-400">11% 變差</span>)</li>
+              <li className="opacity-70">追求 銅/銀/金 賞時請切換策略,建議區會自動換邏輯</li>
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* 操作 */}
+      <div className="grid grid-cols-3 gap-2">
+        <button className="btn rounded-xl py-3 text-sm" onClick={reset}>重置</button>
+        <button className="btn rounded-xl py-3 text-sm" onClick={randomFill}>隨機 9</button>
+        <button
+          className="btn-primary rounded-xl py-3 text-sm disabled:cursor-not-allowed"
+          onClick={reshuffle}
+          disabled={stampCount<3 || stampCount>7}
+          title={stampCount<3 ? '需要 3+ 印章才能重新貼' : stampCount>7 ? '7 印章內才能重新貼' : ''}
+        >🎲 重新貼</button>
+      </div>
+
+      <footer className="text-center text-xs opacity-40 mt-8 leading-relaxed">
+        <p>純前端模擬器,不蒐集任何資料 · 演算法已對照公認 41.54 / 47.90 / 10.35 / 0.21% 驗證</p>
+        <p className="mt-1">FINAL FANTASY XIV © SQUARE ENIX</p>
+      </footer>
+    </div>
+  );
+}
+
+function Stat({label, value, hint}) {
+  return (
+    <div className="panel rounded-xl p-3 text-center">
+      <div className="text-xs opacity-60">{label}</div>
+      <div className="text-2xl gold font-semibold mt-0.5">{value}</div>
+      {hint && <div className="text-[10px] opacity-40">{hint}</div>}
+    </div>
+  );
+}
+
+/* 機率卡: 帶 ±% 偏差 */
+function ProbCard({title, subtitle, dist, baseline, active}) {
+  return (
+    <div className={'panel rounded-2xl p-3 ' + (active?'border-amber-700/40':'')}>
+      <div className="text-center mb-2">
+        <div className={'font-semibold ' + (active?'gold':'opacity-80')}>{title}</div>
+        {subtitle && <div className="text-[10px] opacity-50 -mt-0.5">{subtitle}</div>}
+      </div>
+      <div className="space-y-1">
+        {[0,1,2,3].map(k=>{
+          const isGoal = k === 3;
+          const v = dist[k];
+          const delta = baseline ? (v - baseline[k]) : null;
+          const showDelta = delta !== null && Math.abs(delta) > 0.0005;
+          return (
+            <div key={k}
+                 className={'flex items-center justify-between px-2.5 py-1.5 rounded ' + (
+                   isGoal ? 'border border-amber-700/40 bg-amber-950/30' : 'bg-white/[0.03]'
+                 )}>
+              <span className="text-[12px] opacity-75">{k} 條線</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className={'text-sm font-semibold ' + (active?'':'opacity-80')}>
+                  {(v*100).toFixed(1)}%
+                </span>
+                {showDelta && (
+                  <span className={'text-[10px] tabular-nums ' + (delta > 0 ? 'text-green-400' : 'text-red-400')}>
+                    {delta > 0 ? '+' : ''}{(delta*100).toFixed(1)}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* 累積機率 chip */
+function CumChip({label, cur, base, reward, highlight}) {
+  const delta = cur - base;
+  const showDelta = Math.abs(delta) > 0.0005;
+  return (
+    <div className={'panel rounded-xl p-2.5 text-center ' + (highlight?'border-amber-700/40':'')}>
+      <div className="text-[10px] opacity-50 mb-0.5">{reward && <span className="mr-1 gold">{reward}</span>}{label}</div>
+      <div className="text-base font-semibold gold tabular-nums">{(cur*100).toFixed(2)}%</div>
+      <div className="text-[10px] opacity-60 tabular-nums">
+        基準 {(base*100).toFixed(2)}%
+        {showDelta && (
+          <span className={'ml-1 ' + (delta > 0 ? 'text-green-400' : 'text-red-400')}>
+            {delta > 0 ? '+' : ''}{(delta*100).toFixed(2)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>

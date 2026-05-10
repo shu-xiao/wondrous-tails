@@ -1,0 +1,61 @@
+# ===== AI / Claude 相關 (不上傳) =====
+.claude/
+.claude-*/
+CLAUDE.md
+CLAUDE.local.md
+.cursor/
+.cursorrules
+.windsurfrules
+.aider*
+.continue/
+.copilot/
+.github/copilot-*
+.ai/
+ai-notes/
+*.ai.md
+*.claude.md
+.anthropic/
+.openai/
+.chatgpt/
+
+# ===== 系統 / 編輯器 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== 常見開發殘留 =====
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+dist/
+build/
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+
+# ===== 環境變數 / 密鑰 =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ===== 日誌 / 暫存 =====
+*.log
+logs/
+tmp/
+temp/
+
+# ===== 雜項 =====
+.history/
+.scratch/
+notes.md
+TODO.md
+TODO.private.md
