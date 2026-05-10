@@ -3,7 +3,7 @@
 **FFXIV 庫洛日記 — 連線機率計算與「胡思亂想 · 重新貼」決策工具。**
 **The Mobile-First, Offline-Capable Wondrous Tails Solver for FFXIV.**
 
-👉 **立即使用:[點擊開啟模擬器](https://你的帳號.github.io/wondrous-tails/)**
+👉 **立即使用:[點擊開啟模擬器](https://shu-xiao.github.io/wondrous-tails/)**
 
 ---
 
