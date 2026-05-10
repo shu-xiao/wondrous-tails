@@ -77,7 +77,7 @@ function* combinations(arr, k) {
 function expectedDistribution(stamped) {
   const dist = {0:0,1:0,2:0,3:0};
   const need = 9 - stamped.size;
-  if (need < 0) return { error: '印章超過 9 個', dist };
+  if (need < 0) return { error: '貼紙超過 9 個', dist };
   if (need === 0) {
     const n = Math.min(completedLines(stamped).length, 3);
     dist[n] = 1;
@@ -150,8 +150,8 @@ function fmtMetric(v, strategy) {
 }
 
 function suggestion(stampCount, currentLines, potential, dist, strategy) {
-  if (stampCount < 3) return { kind:'na', text:'再點 ' + (3 - stampCount) + ' 個印章才能重新貼' };
-  if (stampCount > 7) return { kind:'na', text:'印章超過 7,已無法重新貼' };
+  if (stampCount < 3) return { kind:'na', text:'再點 ' + (3 - stampCount) + ' 個貼紙才能使用重貼' };
+  if (stampCount > 7) return { kind:'na', text:'貼紙超過 7,遊戲內已無法重貼' };
 
   const cur  = metricValue(dist, strategy);
   const base = metricValue(RESHUFFLE_DIST, strategy);
@@ -159,43 +159,43 @@ function suggestion(stampCount, currentLines, potential, dist, strategy) {
 
   /* 已達策略目標 → 別動 */
   if (strategy === 'bronze' && currentLines >= 1)
-    return { kind:'bad', text:'已達銅賞,不要重新貼', detail:'保留現況 ' + fmtMetric(cur, strategy) };
+    return { kind:'bad', text:'已達銅賞,不建議重貼', detail:'保留現況 ' + fmtMetric(cur, strategy) };
   if (strategy === 'silver' && currentLines >= 2)
-    return { kind:'bad', text:'已達銀賞,不要重新貼', detail:'保留現況 ' + fmtMetric(cur, strategy) };
+    return { kind:'bad', text:'已達銀賞,不建議重貼', detail:'保留現況 ' + fmtMetric(cur, strategy) };
   if (strategy === 'gold' && currentLines >= 3)
     return { kind:'bad', text:'已達金賞!別亂動', detail:'你已 3 線' };
 
   /* 衝金: 看潛在 */
   if (strategy === 'gold') {
     if (potential >= 3 && cur > base)
-      return { kind:'bad', text:'仍有 3 線機會,不要重新貼', detail:'你 ' + fmtMetric(cur, strategy) + ' > 重新貼 ' + fmtMetric(base, strategy) };
+      return { kind:'bad', text:'仍有 3 線機會,不建議重貼', detail:'你 ' + fmtMetric(cur, strategy) + ' > 重貼後 ' + fmtMetric(base, strategy) };
     if (potential < 3)
-      return { kind:'good', text:'已無 3 線可能,重新貼搏 0.21%', detail:'重新貼 P(3) = ' + fmtMetric(base, strategy) };
-    return { kind:'mid', text:'看情況', detail:'你 ' + fmtMetric(cur, strategy) + ' / 重新貼 ' + fmtMetric(base, strategy) };
+      return { kind:'good', text:'已無 3 線可能,建議重貼搏 0.21%', detail:'重貼後 P(3) = ' + fmtMetric(base, strategy) };
+    return { kind:'mid', text:'邊界,看情況', detail:'你 ' + fmtMetric(cur, strategy) + ' / 重貼後 ' + fmtMetric(base, strategy) };
   }
 
-  /* 平衡 (沿用原邏輯,加 7 印章決策法味道) */
+  /* 平衡 */
   if (strategy === 'balanced') {
     if (currentLines >= 1)
-      return { kind:'bad', text:'已有連線,不要重新貼', detail:'你 ' + fmtMetric(cur, strategy) + ' / 重新貼 ' + fmtMetric(base, strategy) };
+      return { kind:'bad', text:'已有連線,不建議重貼', detail:'你 ' + fmtMetric(cur, strategy) + ' / 重貼後 ' + fmtMetric(base, strategy) };
     if (potential >= 3)
-      return { kind:'bad', text:'潛在 3 線,絕對不要重新貼', detail:'重新貼會大幅變差' };
+      return { kind:'bad', text:'潛在 3 線,絕對不建議重貼', detail:'重貼會大幅變差' };
     if (potential <= 1)
-      return { kind:'good', text:'潛在 ≤1 線,建議重新貼', detail:'期望 +' + delta.toFixed(3) + ' 線' };
+      return { kind:'good', text:'潛在 ≤1 線,建議重貼', detail:'期望 +' + delta.toFixed(3) + ' 線' };
     if (delta > 0.05)
-      return { kind:'good', text:'重新貼略佳,可貼', detail:'期望 +' + delta.toFixed(3) + ' 線' };
+      return { kind:'good', text:'建議重貼 (期望略佳)', detail:'期望 +' + delta.toFixed(3) + ' 線' };
     if (delta < -0.05)
-      return { kind:'bad', text:'重新貼略差,不要貼', detail:'期望 ' + delta.toFixed(3) + ' 線' };
-    return { kind:'mid', text:'差不多,看心情', detail:'期望差 ' + Math.abs(delta).toFixed(3) + ' 線' };
+      return { kind:'bad', text:'不建議重貼 (期望略差)', detail:'期望 ' + delta.toFixed(3) + ' 線' };
+    return { kind:'mid', text:'邊界,看心情', detail:'期望差 ' + Math.abs(delta).toFixed(3) + ' 線' };
   }
 
   /* 銅 / 銀: 比 cur vs base 的百分比 */
   const sig = 0.03;
   if (delta > sig)
-    return { kind:'good', text:'重新貼較佳,建議貼', detail:'+' + (delta*100).toFixed(2) + '% (' + STRATEGIES[strategy].desc + ')' };
+    return { kind:'good', text:'建議重貼 (機率較佳)', detail:'+' + (delta*100).toFixed(2) + '% (' + STRATEGIES[strategy].desc + ')' };
   if (delta < -sig)
-    return { kind:'bad', text:'你的盤面較佳,不要貼', detail:(delta*100).toFixed(2) + '% (' + STRATEGIES[strategy].desc + ')' };
-  return { kind:'mid', text:'差不多,看情況', detail:'差 ' + (Math.abs(delta)*100).toFixed(2) + '%' };
+    return { kind:'bad', text:'不建議重貼 (盤面較佳)', detail:(delta*100).toFixed(2) + '% (' + STRATEGIES[strategy].desc + ')' };
+  return { kind:'mid', text:'邊界,看情況', detail:'差 ' + (Math.abs(delta)*100).toFixed(2) + '%' };
 }
 
 /* ────────── React UI ────────── */
@@ -204,7 +204,7 @@ function App() {
   const [history, setHistory]   = useState([]);   // past states for undo
   const [future, setFuture]     = useState([]);   // future states for redo
   const [showLines, setShowLines]       = useState(true);
-  const [showStrategy, setShowStrategy] = useState(true);
+  const [showStrategy, setShowStrategy] = useState(false);
   const [strategy, setStrategy] = useState('balanced');
 
   const stampCount = stamps.size;
@@ -279,8 +279,16 @@ function App() {
     setWithHistory(new Set(all.slice(0, 9)));
   }
   function reshuffle() {
-    if (stampCount < 3 || stampCount > 7) return;
-    randomFill();
+    /* 模擬器版:無視遊戲內 3-7 限制,保留現有貼紙數,只重新隨機分配位置
+       這才符合遊戲內「胡思亂想·重新貼」道具的真正機制 — 不會憑空多/少貼紙 */
+    const count = stamps.size;
+    if (count === 0) return; /* 沒貼紙無法洗 */
+    const all = Array.from({length:16},(_,i)=>i);
+    for (let i = all.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [all[i], all[j]] = [all[j], all[i]];
+    }
+    setWithHistory(new Set(all.slice(0, count)));
   }
 
   return (
@@ -309,7 +317,7 @@ function App() {
               aria-label="重做"
             >↷</button>
           </div>
-          <span className="opacity-70">印章 <span className={'font-semibold ' + (stampCount>=3 && stampCount<=7 ? 'text-green-400' : 'text-red-400')}>{stampCount}</span> / 9 <span className={'ml-1 text-[10px] ' + (stampCount>=3 && stampCount<=7 ? 'text-green-400/80' : 'text-red-400/80')}>{stampCount>=3 && stampCount<=7 ? '可重新貼' : (stampCount<3 ? '不可重新貼 (需 3+)' : '不可重新貼 (>7)')}</span></span>
+          <span className="opacity-70">貼紙 <span className={'font-semibold ' + (stampCount>=3 && stampCount<=7 ? 'text-green-400' : 'text-red-400')}>{stampCount}</span> / 9 <span className={'ml-1 text-[10px] ' + (stampCount>=3 && stampCount<=7 ? 'text-green-400/80' : 'text-red-400/80')}>{stampCount>=3 && stampCount<=7 ? '可重新貼' : (stampCount<3 ? '不可重新貼 (需 3+)' : '不可重新貼 (>7)')}</span></span>
           <label className="flex items-center gap-1 opacity-70 text-xs">
             <input type="checkbox" checked={showLines} onChange={e=>setShowLines(e.target.checked)} />
             高亮
@@ -327,7 +335,40 @@ function App() {
         </div>
       </div>
 
-      {/* 重新貼建議 (動態,跟著策略走) — 緊貼棋盤,讓決策最顯眼 */}
+      {/* 目標策略 — 先選目標,建議跟著變 */}
+      <div className="mb-4">
+        <div className="text-xs opacity-60 mb-1.5 text-center">目標策略</div>
+        <div className="grid grid-cols-4 gap-1.5">
+          {Object.entries(STRATEGIES).map(([key, s]) => {
+            const active = strategy === key;
+            const palette = {
+              balanced: active
+                ? 'bg-gradient-to-br from-slate-400 to-slate-600 text-slate-950 font-semibold border-transparent'
+                : 'border border-slate-400/40 text-slate-300 bg-zinc-900/50',
+              bronze: active
+                ? 'bg-gradient-to-br from-orange-500 to-amber-800 text-white font-semibold border-transparent'
+                : 'border border-orange-600/50 text-orange-300 bg-zinc-900/50',
+              silver: active
+                ? 'bg-gradient-to-br from-zinc-200 to-zinc-500 text-zinc-900 font-semibold border-transparent'
+                : 'border border-zinc-300/50 text-zinc-200 bg-zinc-900/50',
+              gold: active
+                ? 'bg-gradient-to-br from-yellow-300 to-amber-600 text-amber-950 font-bold border-transparent'
+                : 'border border-yellow-500/50 text-yellow-300 bg-zinc-900/50',
+            }[key];
+            return (
+              <button
+                key={key}
+                onClick={()=>setStrategy(key)}
+                className={'rounded-lg py-2 text-xs border transition-colors ' + palette}
+                title={s.desc}
+              >{s.label}</button>
+            );
+          })}
+        </div>
+        <div className="text-center text-[10px] opacity-50 mt-1.5">{STRATEGIES[strategy].desc}</div>
+      </div>
+
+      {/* 重新貼建議 (動態,跟著策略走) */}
       <div className={
         'panel rounded-2xl p-4 mb-4 border-l-4 ' + (
           advice.kind==='good' ? 'border-green-500/70' :
@@ -336,18 +377,55 @@ function App() {
                                  'border-white/10'
         )
       }>
-        <div className="text-xs opacity-60 mb-1">
+        <div className="text-xs opacity-60 mb-2">
           重新貼建議 <span className="opacity-50">· 策略: {STRATEGIES[strategy].label}</span>
         </div>
-        <div className="text-lg font-semibold mb-1">
-          <span className={
+        <div className="flex items-start gap-3">
+          <span className={'text-3xl leading-none shrink-0 select-none ' + (
             advice.kind==='good' ? 'text-green-400' :
             advice.kind==='bad'  ? 'text-red-400'   :
             advice.kind==='mid'  ? 'text-yellow-300':
-                                   'opacity-80'
-          }>{advice.text}</span>
+                                   'opacity-50'
+          )} aria-hidden="true">{
+            advice.kind==='good' ? '✓' :
+            advice.kind==='bad'  ? '✗' :
+            advice.kind==='mid'  ? '⚠' :
+                                   '—'
+          }</span>
+          <div className="flex-1 min-w-0 pt-0.5">
+            {/* 固定 min-height 讓面板大小不隨文字長度變動 */}
+            <div className="text-lg font-semibold leading-tight min-h-[2.75rem] flex items-center">
+              <span className={
+                advice.kind==='good' ? 'text-green-400' :
+                advice.kind==='bad'  ? 'text-red-400'   :
+                advice.kind==='mid'  ? 'text-yellow-300':
+                                       'opacity-80'
+              }>{advice.text}</span>
+            </div>
+            <div className="text-xs opacity-60 min-h-[1.25rem] leading-tight">
+              {advice.detail || ' '}
+            </div>
+          </div>
         </div>
-        {advice.detail && <div className="text-xs opacity-60">{advice.detail}</div>}
+      </div>
+
+      {/* 操作 — 順序: 隨機生成 (左) / 重新貼 (中,主) / 重置 (右,警示) */}
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <button
+          className="btn rounded-xl py-3 text-sm"
+          onClick={randomFill}
+          title="生成一張隨機 9 貼紙的天書"
+        >隨機生成</button>
+        <button
+          className="btn-primary rounded-xl py-3 text-sm"
+          onClick={reshuffle}
+          title="把現有貼紙重新隨機分配 (保留貼紙數)"
+        >🎲 重新貼</button>
+        <button
+          className="rounded-xl py-3 text-sm bg-zinc-200 text-zinc-900 font-semibold hover:bg-white transition-colors"
+          onClick={reset}
+          title="清空所有貼紙,回到 0/9 空盤"
+        >↺ 重置/清空</button>
       </div>
 
       {/* 統計 */}
@@ -355,22 +433,6 @@ function App() {
         <Stat label="目前連線" value={lines.length} />
         <Stat label="潛在連線" value={potential} hint="最佳情況" />
         <Stat label="期望線數" value={expectedLines.toFixed(2)} hint="加權平均" />
-      </div>
-
-      {/* 目標策略 */}
-      <div className="mb-4">
-        <div className="text-xs opacity-60 mb-1.5 text-center">目標策略</div>
-        <div className="grid grid-cols-4 gap-1.5">
-          {Object.entries(STRATEGIES).map(([key, s]) => (
-            <button
-              key={key}
-              onClick={()=>setStrategy(key)}
-              className={'rounded-lg py-2 text-xs ' + (strategy===key ? 'chip-active' : 'chip-idle')}
-              title={s.desc}
-            >{s.label}</button>
-          ))}
-        </div>
-        <div className="text-center text-[10px] opacity-50 mt-1.5">{STRATEGIES[strategy].desc}</div>
       </div>
 
       {/* 機率 — 左右並排,你的天書帶 ±% 偏差 */}
@@ -381,7 +443,7 @@ function App() {
           <ProbCard title="平均值" subtitle="(重新貼後)" dist={RESHUFFLE_DIST} />
         </div>
         <div className="text-center text-[11px] opacity-50 mt-2">
-          假設剩下印章隨機分配 · 數字後 +/- 為與重新貼基準的差
+          假設剩下貼紙隨機分配 · 數字後 +/- 為與重新貼基準的差
         </div>
       </div>
 
@@ -395,19 +457,19 @@ function App() {
         </div>
       </div>
 
-      {/* 7 印章決策法 (可摺疊) */}
+      {/* 7 貼紙決策法 (可摺疊) */}
       <div className="panel rounded-2xl mb-4">
         <button
           onClick={()=>setShowStrategy(s=>!s)}
           className="flex items-center gap-2 w-full text-left p-4 font-semibold gold"
         >
           <span className={'inline-block transition-transform text-xs ' + (showStrategy?'':'-rotate-90')}>▼</span>
-          最佳策略(7 印章決策法)
+          最佳策略(7 貼紙決策法)
         </button>
         {showStrategy && (
           <div className="px-4 pb-4">
             <p className="text-sm opacity-80 mb-3">
-              根據社群研究,最佳決策點在 <span className="gold font-bold">7 個印章</span> 時(平衡策略下):
+              根據社群研究,最佳決策點在 <span className="gold font-bold">7 個貼紙</span> 時(平衡策略下):
             </p>
             <div className="overflow-x-auto -mx-1 mb-4">
               <table className="w-full text-sm border-collapse">
@@ -436,7 +498,7 @@ function App() {
               </table>
             </div>
             <ul className="text-sm opacity-80 space-y-1.5 pl-5 list-disc">
-              <li><span className="gold font-semibold">潛在連線</span> = 剩餘印章最佳放置能達成的最大連線數</li>
+              <li><span className="gold font-semibold">潛在連線</span> = 剩餘貼紙最佳放置能達成的最大連線數</li>
               <li>潛在 1 線(棋盤格)→ 必定重新貼(<span className="text-green-400">89% 改善</span>)</li>
               <li>潛在 3 線 → 絕對不要重新貼(<span className="text-red-400">93%+ 變差</span>)</li>
               <li>已有連線 → 不要重新貼(<span className="text-red-400">79% 變差</span>)</li>
@@ -445,18 +507,6 @@ function App() {
             </ul>
           </div>
         )}
-      </div>
-
-      {/* 操作 */}
-      <div className="grid grid-cols-3 gap-2">
-        <button className="btn rounded-xl py-3 text-sm" onClick={reset}>重置</button>
-        <button className="btn rounded-xl py-3 text-sm" onClick={randomFill}>隨機 9</button>
-        <button
-          className="btn-primary rounded-xl py-3 text-sm disabled:cursor-not-allowed"
-          onClick={reshuffle}
-          disabled={stampCount<3 || stampCount>7}
-          title={stampCount<3 ? '需要 3+ 印章才能重新貼' : stampCount>7 ? '7 印章內才能重新貼' : ''}
-        >🎲 重新貼</button>
       </div>
 
       <footer className="text-center text-xs opacity-40 mt-8 leading-relaxed">
