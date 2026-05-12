@@ -15,25 +15,98 @@
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
-  html, body { background:#0f0f11; color:#e8e3d6; }
+  /* ─── 主題色變數 ─── */
+  :root {
+    --bg: #0f0f11;
+    --fg: #e8e3d6;
+    --panel-bg: #1a1a1f;
+    --panel-border: #2c2c33;
+    --cell-bg: #15151a;
+    --cell-border: #2c2c33;
+    --cell-on-from: #3a2c12;
+    --cell-on-to: #5a4220;
+    --cell-on-text: #fff;
+    --gold: #d6b56b;
+    --gold-to: #a8884a;
+    --primary-text: #1a1a1f;
+  }
+  html.light {
+    --bg: #faf6ec;
+    --fg: #2a2820;
+    --panel-bg: #ffffff;
+    --panel-border: #e0dccb;
+    --cell-bg: #f5f0e0;
+    --cell-border: #dcd6c2;
+    --cell-on-from: #f3d488;
+    --cell-on-to: #c89c4a;
+    --cell-on-text: #3a2c12;
+    --gold: #a8884a;
+    --gold-to: #8a6c36;
+    --primary-text: #fff;
+  }
+
+  html, body { background: var(--bg); color: var(--fg); transition: background .2s ease, color .2s ease; }
   body { font-family: -apple-system, "Segoe UI", "Noto Sans TC", system-ui, sans-serif; }
-  .gold { color:#d6b56b; }
-  .panel { background:#1a1a1f; border:1px solid #2c2c33; }
+  .gold { color: var(--gold); }
+  .panel { background: var(--panel-bg); border: 1px solid var(--panel-border); }
   .cell {
-    aspect-ratio:1/1; border:1px solid #2c2c33; background:#15151a;
+    aspect-ratio:1/1; border:1px solid var(--cell-border); background: var(--cell-bg);
     display:flex; align-items:center; justify-content:center;
     user-select:none; -webkit-tap-highlight-color:transparent;
     transition: transform .08s ease, background .12s ease;
     font-size: clamp(20px, 6vw, 36px);
   }
   .cell:active { transform: scale(0.94); }
-  .cell.on { background:linear-gradient(135deg,#3a2c12,#5a4220); border-color:#d6b56b; color:#fff; }
-  .cell.line-hit { box-shadow: inset 0 0 0 2px #d6b56b; }
-  .btn { background:#1a1a1f; border:1px solid #2c2c33; color:#e8e3d6; }
-  .btn-primary { background:linear-gradient(135deg,#d6b56b,#a8884a); color:#1a1a1f; border:none; font-weight:600; }
+  .cell.on { background: linear-gradient(135deg, var(--cell-on-from), var(--cell-on-to)); border-color: var(--gold); color: var(--cell-on-text); }
+  .cell.line-hit { box-shadow: inset 0 0 0 2px var(--gold); }
+  .btn { background: var(--panel-bg); border: 1px solid var(--panel-border); color: var(--fg); }
+  .btn-primary { background: linear-gradient(135deg, var(--gold), var(--gold-to)); color: var(--primary-text); border:none; font-weight:600; }
   .btn-primary:disabled { opacity:.4; }
-  .chip-active { background:linear-gradient(135deg,#d6b56b,#a8884a); color:#1a1a1f; font-weight:600; border:none; }
-  .chip-idle { background:#1a1a1f; border:1px solid #2c2c33; color:#e8e3d6; opacity:.75; }
+
+  /* ─── Light mode 下對部分 Tailwind 色票的覆寫 (確保對比) ─── */
+  html.light .text-slate-300,
+  html.light .text-zinc-300,
+  html.light .text-zinc-200 { color:#475569; }
+  html.light .text-orange-300 { color:#c2410c; }
+  html.light .text-yellow-300 { color:#a16207; }
+  html.light .text-yellow-400 { color:#ca8a04; }
+  html.light .text-red-300,
+  html.light .text-red-400 { color:#b91c1c; }
+  html.light .text-green-300 { color:#166534; }
+  html.light .text-green-400 { color:#15803d; }
+  html.light .bg-zinc-900\/50 { background-color: rgba(0,0,0,0.04); }
+  html.light .bg-white\/5,
+  html.light .bg-white\/\[0\.03\],
+  html.light .bg-white\/\[0\.02\] { background-color: rgba(0,0,0,0.04); }
+  html.light .border-white\/5 { border-color: rgba(0,0,0,0.08); }
+  html.light .border-white\/10 { border-color: rgba(0,0,0,0.12); }
+  html.light .bg-amber-950\/20,
+  html.light .bg-amber-950\/30 { background-color: rgba(180,140,60,0.15); }
+  html.light .border-amber-700\/40,
+  html.light .border-amber-700\/50 { border-color: rgba(168,136,74,0.5); }
+  html.light .bg-green-900\/30 { background-color: rgba(34,197,94,0.18); }
+  html.light .bg-yellow-900\/30 { background-color: rgba(234,179,8,0.22); }
+  html.light .bg-red-950\/30 { background-color: rgba(220,38,38,0.08); }
+  html.light .border-red-700\/50 { border-color: rgba(185,28,28,0.5); }
+  html.light .border-green-500\/70 { border-color: rgba(34,197,94,0.7); }
+  html.light .border-red-500\/70 { border-color: rgba(220,38,38,0.7); }
+  html.light .border-yellow-500\/70 { border-color: rgba(234,179,8,0.8); }
+  html.light .text-amber-950 { color:#451a03; }
+  html.light .text-slate-950 { color:#020617; }
+  html.light .text-zinc-900 { color:#18181b; }
+
+  /* ─── 排名表 sticky thead (確保不透明,避免捲動時穿透) ─── */
+  .rank-th {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background-color: var(--panel-bg) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+  }
+  html.light .rank-th {
+    border-bottom-color: rgba(0,0,0,0.15);
+  }
+  .rank-table-wrap { isolation: isolate; }  /* 隔離 stacking context */
 </style>
 </head>
 <body>
@@ -128,6 +201,86 @@ function cumulative(dist) {
   };
 }
 
+/* ────────── 全局排名表 (預計算離線資料) ────────── */
+/* AUTO-GENERATED by gen_rank_table.py — DO NOT EDIT */
+const RANK_TABLES = {"0":{"total":1,"denom":11440,"ge1":[{"n":6688,"c":1}],"ge2":[{"n":1208,"c":1}],"ge3":[{"n":24,"c":1}]},"1":{"total":16,"denom":6435,"ge1":[{"n":3909,"c":8},{"n":3615,"c":8}],"ge2":[{"n":760,"c":8},{"n":599,"c":8}],"ge3":[{"n":17,"c":8},{"n":10,"c":8}]},"2":{"total":120,"denom":3432,"ge1":[{"n":2240,"c":8},{"n":2214,"c":8},{"n":2212,"c":4},{"n":2098,"c":32},{"n":2042,"c":8},{"n":1950,"c":8},{"n":1919,"c":32},{"n":1792,"c":4},{"n":1790,"c":16}],"ge2":[{"n":488,"c":4},{"n":484,"c":8},{"n":462,"c":8},{"n":408,"c":8},{"n":396,"c":32},{"n":336,"c":8},{"n":325,"c":32},{"n":248,"c":16},{"n":244,"c":4}],"ge3":[{"n":14,"c":8},{"n":12,"c":4},{"n":10,"c":16},{"n":8,"c":32},{"n":6,"c":40},{"n":4,"c":4},{"n":2,"c":16}]},"3":{"total":560,"denom":1716,"ge1":[{"n":1267,"c":8},{"n":1247,"c":16},{"n":1219,"c":8},{"n":1182,"c":16},{"n":1161,"c":16},{"n":1114,"c":32},{"n":1078,"c":32},{"n":1060,"c":32},{"n":1059,"c":48},{"n":1032,"c":16},{"n":1031,"c":16},{"n":1020,"c":8},{"n":1013,"c":32},{"n":990,"c":16},{"n":973,"c":16},{"n":971,"c":32},{"n":966,"c":8},{"n":932,"c":32},{"n":931,"c":32},{"n":930,"c":32},{"n":911,"c":16},{"n":898,"c":16},{"n":870,"c":32},{"n":844,"c":16},{"n":843,"c":16},{"n":789,"c":16}],"ge2":[{"n":341,"c":8},{"n":283,"c":16},{"n":270,"c":8},{"n":264,"c":16},{"n":247,"c":32},{"n":243,"c":16},{"n":220,"c":32},{"n":219,"c":16},{"n":218,"c":32},{"n":217,"c":8},{"n":202,"c":32},{"n":183,"c":64},{"n":180,"c":16},{"n":168,"c":16},{"n":166,"c":32},{"n":160,"c":16},{"n":148,"c":8},{"n":143,"c":32},{"n":141,"c":32},{"n":139,"c":32},{"n":132,"c":16},{"n":119,"c":32},{"n":105,"c":16},{"n":103,"c":16},{"n":75,"c":16}],"ge3":[{"n":12,"c":8},{"n":7,"c":32},{"n":6,"c":96},{"n":5,"c":64},{"n":4,"c":96},{"n":3,"c":48},{"n":2,"c":88},{"n":1,"c":96},{"n":0,"c":32}]},"4":{"total":1820,"denom":792,"ge1":[{"n":792,"c":10},{"n":616,"c":2},{"n":602,"c":16},{"n":594,"c":32},{"n":589,"c":32},{"n":585,"c":32},{"n":571,"c":32},{"n":555,"c":16},{"n":548,"c":64},{"n":544,"c":8},{"n":543,"c":48},{"n":539,"c":32},{"n":529,"c":48},{"n":527,"c":16},{"n":524,"c":64},{"n":520,"c":8},{"n":519,"c":16},{"n":516,"c":32},{"n":514,"c":8},{"n":511,"c":32},{"n":503,"c":16},{"n":498,"c":64},{"n":494,"c":24},{"n":479,"c":16},{"n":478,"c":32},{"n":474,"c":32},{"n":464,"c":2},{"n":460,"c":32},{"n":459,"c":32},{"n":458,"c":16},{"n":457,"c":32},{"n":456,"c":16},{"n":455,"c":32},{"n":454,"c":32},{"n":451,"c":32},{"n":448,"c":32},{"n":443,"c":16},{"n":442,"c":16},{"n":441,"c":16},{"n":438,"c":32},{"n":437,"c":64},{"n":436,"c":2},{"n":432,"c":64},{"n":426,"c":32},{"n":419,"c":64},{"n":415,"c":16},{"n":414,"c":16},{"n":413,"c":16},{"n":410,"c":32},{"n":408,"c":32},{"n":404,"c":24},{"n":401,"c":64},{"n":400,"c":16},{"n":396,"c":32},{"n":395,"c":32},{"n":381,"c":32},{"n":377,"c":32},{"n":372,"c":32},{"n":368,"c":16},{"n":363,"c":8},{"n":355,"c":64},{"n":349,"c":32},{"n":336,"c":8},{"n":332,"c":16},{"n":292,"c":4}],"ge2":[{"n":284,"c":2},{"n":234,"c":8},{"n":159,"c":16},{"n":150,"c":16},{"n":148,"c":32},{"n":145,"c":32},{"n":141,"c":32},{"n":138,"c":32},{"n":136,"c":2},{"n":135,"c":64},{"n":132,"c":16},{"n":126,"c":32},{"n":122,"c":24},{"n":116,"c":8},{"n":111,"c":16},{"n":110,"c":32},{"n":109,"c":16},{"n":105,"c":64},{"n":102,"c":16},{"n":100,"c":32},{"n":99,"c":64},{"n":96,"c":40},{"n":95,"c":64},{"n":93,"c":48},{"n":92,"c":2},{"n":91,"c":32},{"n":88,"c":56},{"n":86,"c":16},{"n":85,"c":32},{"n":84,"c":16},{"n":82,"c":16},{"n":80,"c":32},{"n":78,"c":32},{"n":76,"c":32},{"n":73,"c":64},{"n":71,"c":16},{"n":70,"c":16},{"n":69,"c":32},{"n":68,"c":40},{"n":67,"c":64},{"n":64,"c":2},{"n":63,"c":64},{"n":62,"c":32},{"n":61,"c":64},{"n":59,"c":16},{"n":57,"c":16},{"n":55,"c":16},{"n":53,"c":64},{"n":52,"c":8},{"n":49,"c":32},{"n":48,"c":16},{"n":47,"c":32},{"n":44,"c":32},{"n":43,"c":64},{"n":39,"c":64},{"n":33,"c":64},{"n":28,"c":16},{"n":24,"c":8},{"n":12,"c":4}],"ge3":[{"n":12,"c":2},{"n":6,"c":8},{"n":5,"c":96},{"n":4,"c":176},{"n":3,"c":192},{"n":2,"c":328},{"n":1,"c":536},{"n":0,"c":482}]},"5":{"total":4368,"denom":330,"ge1":[{"n":330,"c":120},{"n":266,"c":32},{"n":265,"c":8},{"n":261,"c":16},{"n":258,"c":8},{"n":256,"c":16},{"n":253,"c":32},{"n":248,"c":32},{"n":247,"c":80},{"n":242,"c":32},{"n":237,"c":112},{"n":236,"c":32},{"n":234,"c":40},{"n":233,"c":112},{"n":232,"c":32},{"n":228,"c":48},{"n":225,"c":64},{"n":224,"c":96},{"n":223,"c":32},{"n":221,"c":8},{"n":220,"c":64},{"n":219,"c":128},{"n":218,"c":32},{"n":215,"c":64},{"n":214,"c":160},{"n":213,"c":32},{"n":208,"c":32},{"n":207,"c":64},{"n":206,"c":96},{"n":205,"c":48},{"n":202,"c":32},{"n":201,"c":224},{"n":200,"c":112},{"n":199,"c":16},{"n":196,"c":32},{"n":195,"c":112},{"n":194,"c":32},{"n":189,"c":64},{"n":188,"c":32},{"n":186,"c":32},{"n":183,"c":112},{"n":182,"c":160},{"n":181,"c":32},{"n":179,"c":32},{"n":178,"c":48},{"n":177,"c":80},{"n":173,"c":64},{"n":172,"c":48},{"n":169,"c":40},{"n":167,"c":16},{"n":164,"c":144},{"n":163,"c":48},{"n":162,"c":32},{"n":159,"c":176},{"n":158,"c":128},{"n":157,"c":16},{"n":155,"c":16},{"n":154,"c":120},{"n":152,"c":32},{"n":151,"c":16},{"n":147,"c":64},{"n":146,"c":64},{"n":145,"c":32},{"n":141,"c":144},{"n":140,"c":128},{"n":135,"c":32},{"n":130,"c":32},{"n":129,"c":16},{"n":128,"c":32},{"n":124,"c":48},{"n":118,"c":32},{"n":117,"c":24}],"ge2":[{"n":123,"c":8},{"n":116,"c":16},{"n":111,"c":16},{"n":110,"c":32},{"n":85,"c":32},{"n":84,"c":16},{"n":79,"c":8},{"n":77,"c":32},{"n":75,"c":48},{"n":74,"c":32},{"n":73,"c":32},{"n":69,"c":32},{"n":64,"c":32},{"n":62,"c":32},{"n":61,"c":32},{"n":60,"c":24},{"n":59,"c":64},{"n":58,"c":32},{"n":56,"c":32},{"n":55,"c":56},{"n":53,"c":32},{"n":52,"c":96},{"n":51,"c":32},{"n":49,"c":96},{"n":48,"c":8},{"n":47,"c":32},{"n":46,"c":112},{"n":45,"c":128},{"n":44,"c":112},{"n":43,"c":32},{"n":42,"c":80},{"n":41,"c":80},{"n":40,"c":160},{"n":39,"c":32},{"n":38,"c":112},{"n":37,"c":64},{"n":36,"c":80},{"n":35,"c":64},{"n":34,"c":32},{"n":33,"c":80},{"n":32,"c":96},{"n":31,"c":48},{"n":30,"c":80},{"n":29,"c":32},{"n":28,"c":112},{"n":27,"c":192},{"n":26,"c":96},{"n":25,"c":128},{"n":24,"c":160},{"n":23,"c":120},{"n":22,"c":32},{"n":21,"c":96},{"n":20,"c":64},{"n":19,"c":112},{"n":18,"c":16},{"n":17,"c":176},{"n":16,"c":128},{"n":15,"c":48},{"n":14,"c":80},{"n":13,"c":48},{"n":12,"c":88},{"n":11,"c":80},{"n":10,"c":104},{"n":9,"c":64},{"n":8,"c":32},{"n":7,"c":16},{"n":5,"c":48}],"ge3":[{"n":5,"c":24},{"n":4,"c":32},{"n":3,"c":256},{"n":2,"c":344},{"n":1,"c":1320},{"n":0,"c":2392}]},"6":{"total":8008,"denom":120,"ge1":[{"n":120,"c":660},{"n":98,"c":16},{"n":97,"c":64},{"n":93,"c":64},{"n":92,"c":48},{"n":90,"c":32},{"n":89,"c":64},{"n":88,"c":136},{"n":87,"c":64},{"n":86,"c":40},{"n":85,"c":32},{"n":84,"c":272},{"n":83,"c":320},{"n":82,"c":72},{"n":81,"c":64},{"n":80,"c":96},{"n":79,"c":432},{"n":78,"c":256},{"n":77,"c":32},{"n":76,"c":32},{"n":75,"c":64},{"n":74,"c":152},{"n":73,"c":96},{"n":72,"c":32},{"n":71,"c":192},{"n":70,"c":384},{"n":69,"c":64},{"n":68,"c":16},{"n":67,"c":64},{"n":66,"c":336},{"n":65,"c":512},{"n":64,"c":288},{"n":63,"c":32},{"n":62,"c":64},{"n":61,"c":208},{"n":60,"c":432},{"n":59,"c":456},{"n":58,"c":32},{"n":57,"c":24},{"n":56,"c":72},{"n":55,"c":192},{"n":54,"c":96},{"n":53,"c":32},{"n":52,"c":24},{"n":51,"c":24},{"n":49,"c":104},{"n":48,"c":136},{"n":47,"c":224},{"n":46,"c":48},{"n":44,"c":8},{"n":43,"c":144},{"n":42,"c":200},{"n":41,"c":160},{"n":40,"c":24},{"n":38,"c":8},{"n":37,"c":80},{"n":36,"c":140},{"n":35,"c":32},{"n":34,"c":16}],"ge2":[{"n":55,"c":48},{"n":54,"c":64},{"n":49,"c":32},{"n":48,"c":32},{"n":44,"c":4},{"n":42,"c":32},{"n":40,"c":16},{"n":36,"c":72},{"n":35,"c":80},{"n":34,"c":80},{"n":30,"c":32},{"n":29,"c":96},{"n":28,"c":104},{"n":27,"c":96},{"n":26,"c":16},{"n":23,"c":64},{"n":22,"c":128},{"n":21,"c":128},{"n":20,"c":264},{"n":19,"c":128},{"n":18,"c":320},{"n":17,"c":128},{"n":16,"c":232},{"n":15,"c":448},{"n":14,"c":408},{"n":13,"c":368},{"n":12,"c":472},{"n":11,"c":224},{"n":10,"c":208},{"n":9,"c":272},{"n":8,"c":320},{"n":7,"c":584},{"n":6,"c":384},{"n":5,"c":584},{"n":4,"c":440},{"n":3,"c":496},{"n":2,"c":424},{"n":1,"c":160},{"n":0,"c":20}],"ge3":[{"n":3,"c":112},{"n":2,"c":104},{"n":1,"c":1472},{"n":0,"c":6320}]},"7":{"total":11440,"denom":36,"ge1":[{"n":36,"c":2168},{"n":28,"c":112},{"n":27,"c":96},{"n":26,"c":48},{"n":25,"c":200},{"n":24,"c":544},{"n":23,"c":800},{"n":22,"c":464},{"n":21,"c":80},{"n":20,"c":352},{"n":19,"c":1224},{"n":18,"c":1520},{"n":17,"c":704},{"n":16,"c":128},{"n":15,"c":128},{"n":14,"c":288},{"n":13,"c":1104},{"n":12,"c":832},{"n":11,"c":232},{"n":8,"c":80},{"n":7,"c":232},{"n":6,"c":104}],"ge2":[{"n":36,"c":32},{"n":18,"c":48},{"n":17,"c":176},{"n":16,"c":64},{"n":14,"c":8},{"n":13,"c":112},{"n":12,"c":432},{"n":11,"c":496},{"n":10,"c":176},{"n":9,"c":32},{"n":8,"c":288},{"n":7,"c":96},{"n":6,"c":304},{"n":5,"c":576},{"n":4,"c":1040},{"n":3,"c":1592},{"n":2,"c":1928},{"n":1,"c":2728},{"n":0,"c":1312}],"ge3":[{"n":3,"c":16},{"n":2,"c":8},{"n":1,"c":800},{"n":0,"c":10616}]},"8":{"total":12870,"denom":8,"ge1":[{"n":8,"c":4649},{"n":6,"c":8},{"n":5,"c":272},{"n":4,"c":1652},{"n":3,"c":3136},{"n":2,"c":2456},{"n":1,"c":664},{"n":0,"c":33}],"ge2":[{"n":8,"c":301},{"n":4,"c":20},{"n":3,"c":592},{"n":2,"c":2016},{"n":1,"c":2576},{"n":0,"c":7365}],"ge3":[{"n":1,"c":216},{"n":0,"c":12654}]},"9":{"total":11440,"denom":1,"ge1":[{"n":1,"c":6688},{"n":0,"c":4752}],"ge2":[{"n":1,"c":1208},{"n":0,"c":10232}],"ge3":[{"n":1,"c":24},{"n":0,"c":11416}]}};
+
+/* 計算使用者目前 (k 貼紙) 在全局排名中的位置 */
+function rankInfo(stampCount, dist, goal /* 'ge1'|'ge2'|'ge3' */) {
+  const table = RANK_TABLES[String(stampCount)];
+  if (!table) return null;
+  const tiers = table[goal];
+  if (!tiers || tiers.length === 0) return null;
+
+  let prob;
+  if (goal === 'ge1')      prob = dist[1] + dist[2] + dist[3];
+  else if (goal === 'ge2') prob = dist[2] + dist[3];
+  else                     prob = dist[3];
+
+  const userNumer = Math.round(prob * table.denom);
+  const tierIdx = tiers.findIndex(t => t.n === userNumer);
+
+  // 嚴格比你差的配置數 (numerator 較小)
+  let strictlyWorse = 0;
+  for (const t of tiers) if (t.n < userNumer) strictlyWorse += t.c;
+  // 嚴格比你好的配置數
+  let strictlyBetter = 0;
+  for (const t of tiers) if (t.n > userNumer) strictlyBetter += t.c;
+
+  return {
+    table: tiers,
+    denom: table.denom,
+    total: table.total,
+    userNumer,
+    tierIdx,                                     // -1 if not found (FP edge case)
+    tierCount: tierIdx >= 0 ? tiers[tierIdx].c : 0,
+    strictlyWorse,
+    strictlyBetter,
+    pctWorseOrEqual: ((table.total - strictlyBetter) / table.total) * 100,
+  };
+}
+
+/* 重新貼後的期望落點 — 眾數 / 加權平均 / 中位 三個指標 */
+function expectedRankInfo(stampCount, goal) {
+  const table = RANK_TABLES[String(stampCount)];
+  if (!table) return null;
+  const tiers = table[goal];
+  if (!tiers || tiers.length === 0) return null;
+  const denom = table.denom;
+  const total = table.total;
+
+  // 眾數:配置數最多的 tier
+  let modeIdx = 0, modeMax = -1;
+  for (let i = 0; i < tiers.length; i++) {
+    if (tiers[i].c > modeMax) { modeIdx = i; modeMax = tiers[i].c; }
+  }
+
+  // 加權平均機率 → 對應最接近的 tier
+  let weightedSum = 0;
+  for (const t of tiers) weightedSum += (t.n / denom) * t.c;
+  const meanProb = weightedSum / total;
+  let meanIdx = 0, meanDiff = Infinity;
+  for (let i = 0; i < tiers.length; i++) {
+    const d = Math.abs(tiers[i].n / denom - meanProb);
+    if (d < meanDiff) { meanIdx = i; meanDiff = d; }
+  }
+
+  // 中位:累積配置數達一半的 tier (從機率高的端累積)
+  let cum = 0;
+  const half = total / 2;
+  let medianIdx = tiers.length - 1;
+  for (let i = 0; i < tiers.length; i++) {
+    cum += tiers[i].c;
+    if (cum >= half) { medianIdx = i; break; }
+  }
+
+  return {
+    modeIdx, modePct: tiers[modeIdx].c / total,
+    meanIdx, meanProb,
+    medianIdx,
+  };
+}
+
 /* ────────── 目標策略 ────────── */
 const STRATEGIES = {
   balanced: { label: '平衡',   desc: '加權期望線數',   metric: 'expected' },
@@ -205,7 +358,36 @@ function App() {
   const [future, setFuture]     = useState([]);   // future states for redo
   const [showLines, setShowLines]       = useState(true);
   const [showStrategy, setShowStrategy] = useState(false);
+  const [showRank, setShowRank]         = useState(false);
+  const [rankGoal, setRankGoal]         = useState('ge3');  // 'ge1' | 'ge2' | 'ge3'
+  const [showAbout, setShowAbout]       = useState(false);
   const [strategy, setStrategy] = useState('balanced');
+
+  /* 強制更新 PWA — 砍 SW + 清快取 + reload */
+  async function handleForceUpdate() {
+    if (!window.confirm('確定要強制更新嗎?\n會清除快取後重新載入,確保拿到最新版本。')) return;
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch (_) { /* 忽略個別失敗,仍 reload */ }
+    window.location.reload();
+  }
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('wt-theme') || 'dark'; } catch { return 'dark'; }
+  });
+
+  /* 將 theme 套用到 <html>,並寫入 localStorage */
+  useEffect(() => {
+    const html = document.documentElement;
+    html.classList.toggle('light', theme === 'light');
+    try { localStorage.setItem('wt-theme', theme); } catch {}
+  }, [theme]);
 
   const stampCount = stamps.size;
   const lines      = useMemo(() => completedLines(stamps), [stamps]);
@@ -293,9 +475,15 @@ function App() {
 
   return (
     <div className="min-h-screen px-4 py-6 max-w-xl mx-auto">
-      <header className="text-center mb-5">
+      <header className="text-center mb-5 relative">
         <h1 className="text-2xl font-semibold tracking-wider gold">天書奇談模擬器</h1>
         <p className="text-xs opacity-60 mt-1">Wondrous Tails Solver · 連線機率 / 重新貼建議 / 目標策略</p>
+        <button
+          onClick={()=>setTheme(t => t === 'dark' ? 'light' : 'dark')}
+          className="absolute top-0 right-0 px-2 py-1 text-xl rounded-lg hover:bg-white/5 transition-colors"
+          title={theme === 'dark' ? '切換到淺色模式' : '切換到深色模式'}
+          aria-label="切換主題"
+        >{theme === 'dark' ? '☀️' : '🌙'}</button>
       </header>
 
       {/* 棋盤 */}
@@ -457,6 +645,16 @@ function App() {
         </div>
       </div>
 
+      {/* 全局排名 (可摺疊;k=3..8 時自動展開) */}
+      <RankPanel
+        stampCount={stampCount}
+        dist={exp.dist}
+        goal={rankGoal}
+        setGoal={setRankGoal}
+        show={showRank}
+        setShow={setShowRank}
+      />
+
       {/* 7 貼紙決策法 (可摺疊) */}
       <div className="panel rounded-2xl mb-4">
         <button
@@ -509,10 +707,117 @@ function App() {
         )}
       </div>
 
-      <footer className="text-center text-xs opacity-40 mt-8 leading-relaxed">
-        <p>純前端模擬器,不蒐集任何資料 · 演算法已對照公認 41.54 / 47.90 / 10.35 / 0.21% 驗證</p>
-        <p className="mt-1">FINAL FANTASY XIV © SQUARE ENIX</p>
+      {/* ────── Footer (仿 Cactpot Solver) ────── */}
+      <footer className="mt-12 pb-8 flex flex-col items-center gap-4 opacity-90">
+        <button
+          onClick={()=>setShowAbout(true)}
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-amber-500/30 bg-black/20 gold text-xs font-bold hover:bg-amber-500/10 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          關於 / 致謝
+        </button>
+
+        <div className="flex flex-col items-center gap-1">
+          <div className="gold text-[10px] font-mono opacity-60 tabular-nums">版本 v1.0 · 2026-05-12 (UTC+8)</div>
+          <div className="text-[10px] opacity-30 scale-90 select-none">純前端 · 不蒐集任何資料 · FINAL FANTASY XIV © SQUARE ENIX</div>
+        </div>
+
+        <button
+          onClick={handleForceUpdate}
+          className="text-[10px] gold opacity-50 underline flex items-center gap-1 hover:opacity-100 transition-opacity"
+          title="清除快取並重新載入"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+            <path d="M3 3v5h5"/>
+          </svg>
+          強制更新
+        </button>
       </footer>
+
+      {/* About Modal */}
+      {showAbout && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={()=>setShowAbout(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="panel rounded-2xl p-6 max-w-md w-full max-h-[85vh] overflow-y-auto"
+            onClick={(e)=>e.stopPropagation()}
+          >
+            <div className="text-center mb-4">
+              <div className="text-xs opacity-50 tracking-widest mb-1">ABOUT</div>
+              <h2 className="text-xl font-bold gold">你好，我是 ShuXiao</h2>
+            </div>
+
+            <p className="text-sm opacity-85 leading-relaxed mb-3">
+              這是基於興趣做的 <span className="gold">天書奇談機率工具</span>,純前端、不蒐集資料、開源。希望能幫到光之戰士在「7 印章」那一刻不再糾結。
+            </p>
+            <p className="text-xs opacity-65 leading-relaxed mb-4">
+              本專案由 Claude 協作開發。核心演算法為精確窮舉(非蒙地卡羅),已對照 FFXIV 社群公認 9 印章分佈 41.54 / 47.90 / 10.35 / 0.21% 驗證。
+            </p>
+
+            <div className="border-t border-white/10 pt-4 mb-4">
+              <div className="text-[11px] gold font-semibold tracking-wider mb-2">📚 致謝 (CREDITS)</div>
+              <ul className="text-xs opacity-80 space-y-1.5 leading-relaxed">
+                <li>
+                  · <a href="https://www.reddit.com/r/ffxiv/comments/550lo8/wondrous_tails_analysis_when_should_you_shuffle/" target="_blank" rel="noopener" className="underline gold hover:opacity-80">Reddit 社群分析</a> — 「7 印章決策法」原始研究
+                </li>
+                <li>
+                  · <a href="http://ffxiv.morpheusz.com/p/wondrous-tails-solver.html" target="_blank" rel="noopener" className="underline gold hover:opacity-80">Morpheusz</a> — 解算器先驅
+                </li>
+                <li>
+                  · <a href="https://cycleapple.github.io/xiv-tc-wondrous-tails/" target="_blank" rel="noopener" className="underline gold hover:opacity-80">cycleapple</a> — UI / 決策表參考
+                </li>
+                <li>
+                  · <a href="https://rarakumoai.github.io/cactpot-solver/" target="_blank" rel="noopener" className="underline gold hover:opacity-80">Cactpot Solver (仙人微彩計算器)</a> — 提供靈感
+                </li>
+              </ul>
+            </div>
+
+            <div className="border-t border-white/10 pt-4 mb-2">
+              <div className="text-[11px] gold font-semibold tracking-wider mb-3 text-center">
+                ✉️ 聯絡 (CONTACT) · <span className="opacity-70 font-mono normal-case tracking-normal">d3a2s1l@gmail.com</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href="https://github.com/Shu-Xiao/wondrous-tails"
+                  target="_blank"
+                  rel="noopener"
+                  className="btn rounded-full px-3 py-2 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-white/5"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.57.1.78-.25.78-.55v-2.07c-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.28-1.67-1.28-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.18a10.95 10.95 0 0 1 5.74 0c2.2-1.49 3.16-1.18 3.16-1.18.62 1.58.23 2.75.11 3.04.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.66.79.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/>
+                  </svg>
+                  GitHub
+                </a>
+                <a
+                  href="mailto:d3a2s1l@gmail.com?subject=天書奇談模擬器"
+                  className="btn-primary rounded-full px-3 py-2 text-xs font-bold flex items-center justify-center gap-1.5"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect width="20" height="16" x="2" y="4" rx="2"/>
+                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                  </svg>
+                  寄信
+                </a>
+              </div>
+            </div>
+
+            <button
+              onClick={()=>setShowAbout(false)}
+              className="mt-4 mx-auto block text-xs opacity-60 hover:opacity-100 transition-opacity"
+            >
+              關閉
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -561,6 +866,253 @@ function ProbCard({title, subtitle, dist, baseline, active}) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* 全局排名面板 */
+function RankPanel({stampCount, dist, goal, setGoal, show, setShow}) {
+  const info = React.useMemo(
+    () => rankInfo(stampCount, dist, goal),
+    [stampCount, dist, goal]
+  );
+  const expInfo = React.useMemo(
+    () => expectedRankInfo(stampCount, goal),
+    [stampCount, goal]
+  );
+  if (!info) return null;
+
+  const { table, denom, total, userNumer, tierIdx, tierCount, strictlyWorse, strictlyBetter, pctWorseOrEqual } = info;
+  const userProb = denom > 0 ? userNumer / denom : 0;
+
+  // 期望落點(若計算失敗則 null)
+  const modeIdx = expInfo ? expInfo.modeIdx : -1;
+  const meanIdx = expInfo ? expInfo.meanIdx : -1;
+  const medianIdx = expInfo ? expInfo.medianIdx : -1;
+  const tierOf = (i) => (i >= 0 && i < table.length) ? table[i] : null;
+  const modeTier   = tierOf(modeIdx);
+  const meanTier   = tierOf(meanIdx);
+  const medianTier = tierOf(medianIdx);
+
+  // 比較:你的 tier 比期望好多少 (數字小 = 排名靠前 = 機率高)
+  const diffVs = (i) => (tierIdx >= 0 && i >= 0) ? (i - tierIdx) : null;
+  const diffMode   = diffVs(modeIdx);
+  const diffMean   = diffVs(meanIdx);
+  const diffMedian = diffVs(medianIdx);
+  const formatDiff = (d) => {
+    if (d === null) return '';
+    if (d === 0) return '= 你';
+    return d > 0 ? `你領先 ${d} 階` : `你落後 ${-d} 階`;
+  };
+
+  const isDegenerate = table.length === 1;
+
+  const goalLabel = { ge1: '銅 ≥ 1 線', ge2: '銀 ≥ 2 線', ge3: '金 ≥ 3 線' }[goal];
+  const goalShort = { ge1: '≥1', ge2: '≥2', ge3: '≥3' }[goal];
+
+  // 頭部摘要
+  const rankSummary = tierIdx >= 0
+    ? `Tier ${tierIdx + 1}/${table.length} · 勝過 ${strictlyWorse.toLocaleString()} 配置 (${(strictlyWorse/total*100).toFixed(2)}%)`
+    : `位置外`;
+
+  return (
+    <div className="panel rounded-2xl mb-4">
+      <button
+        onClick={()=>setShow(s=>!s)}
+        className="flex items-center justify-between w-full text-left p-4"
+        aria-expanded={show}
+      >
+        <span className="flex items-center gap-2 font-semibold gold">
+          <span className={'inline-block transition-transform text-xs ' + (show?'':'-rotate-90')}>▼</span>
+          全局排名
+          <span className="text-xs opacity-60 font-normal">· k={stampCount} · {goalShort}</span>
+        </span>
+        <span className="text-[11px] opacity-70 tabular-nums">{rankSummary}</span>
+      </button>
+
+      {show && (
+        <div className="px-4 pb-4">
+          {/* 目標 tab */}
+          <div className="grid grid-cols-3 gap-1.5 mb-3">
+            {['ge1','ge2','ge3'].map(g => {
+              const active = goal === g;
+              const palette = {
+                ge1: active
+                  ? 'bg-gradient-to-br from-orange-500 to-amber-800 text-white font-semibold border-transparent'
+                  : 'border border-orange-600/40 text-orange-300 bg-zinc-900/50',
+                ge2: active
+                  ? 'bg-gradient-to-br from-zinc-200 to-zinc-500 text-zinc-900 font-semibold border-transparent'
+                  : 'border border-zinc-300/40 text-zinc-200 bg-zinc-900/50',
+                ge3: active
+                  ? 'bg-gradient-to-br from-yellow-300 to-amber-600 text-amber-950 font-bold border-transparent'
+                  : 'border border-yellow-500/40 text-yellow-300 bg-zinc-900/50',
+              }[g];
+              const label = { ge1: '銅 ≥1', ge2: '銀 ≥2', ge3: '金 ≥3' }[g];
+              return (
+                <button
+                  key={g}
+                  onClick={()=>setGoal(g)}
+                  className={'rounded-lg py-1.5 text-xs border transition-colors ' + palette}
+                >{label}</button>
+              );
+            })}
+          </div>
+
+          {/* 排名摘要卡 — 你 vs 重新貼期望落點 */}
+          {isDegenerate ? (
+            <div className="rounded-xl bg-amber-950/30 border border-amber-700/40 p-3 mb-3 text-xs opacity-80">
+              <div className="text-[10px] opacity-60 mb-1">目標 {goalLabel}</div>
+              <div>k={stampCount} 只有 <span className="gold font-semibold">1 種機率等級</span>,全 {total.toLocaleString()} 個配置都是 <span className="gold font-semibold">{(userProb*100).toFixed(2)}%</span> ({userNumer}/{denom}) — 無排名差異。</div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {/* 你的盤面 */}
+              <div className="rounded-xl bg-amber-950/30 border border-amber-700/40 p-3">
+                <div className="text-[10px] opacity-60 mb-1 flex items-center gap-1">
+                  <span className="gold">▶</span> 你的盤面
+                </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="text-xl font-bold gold tabular-nums">{(userProb*100).toFixed(2)}%</div>
+                  <div className="text-[10px] opacity-60 tabular-nums">{userNumer}/{denom}</div>
+                </div>
+                <div className="text-[11px] opacity-75 mt-0.5">
+                  {tierIdx >= 0
+                    ? <>Tier <span className="gold font-semibold">{tierIdx + 1}</span>/{table.length} · 本層 {tierCount.toLocaleString()}</>
+                    : <>無法定位</>}
+                </div>
+                {tierIdx >= 0 && (
+                  <div className="text-[10px] opacity-60 mt-0.5">
+                    勝過 <span className="text-green-400">{(strictlyWorse/total*100).toFixed(1)}%</span>
+                    {strictlyBetter > 0 ? (
+                      <span> · 落後 <span className="text-red-400">{(strictlyBetter/total*100).toFixed(1)}%</span></span>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+
+              {/* 重新貼後期望落點 (3 個指標) */}
+              <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3">
+                <div className="text-[10px] opacity-60 mb-1">◇ 重新貼期望</div>
+                {expInfo && modeTier && meanTier && medianTier ? (
+                  <div className="space-y-0.5 text-[11px]">
+                    <div className="flex items-baseline justify-between gap-1.5">
+                      <span className="text-blue-300">★ 眾數</span>
+                      <span className="tabular-nums">
+                        T{modeIdx + 1} ({(modeTier.n/denom*100).toFixed(modeTier.n/denom < 0.01 ? 4 : 2)}%)
+                      </span>
+                    </div>
+                    <div className="text-[9px] opacity-50 -mt-1 ml-3">{(expInfo.modePct*100).toFixed(1)}% 機率落到</div>
+
+                    <div className="flex items-baseline justify-between gap-1.5 pt-1">
+                      <span className="text-purple-300">✦ 平均</span>
+                      <span className="tabular-nums">
+                        T{meanIdx + 1} ({(expInfo.meanProb*100).toFixed(expInfo.meanProb < 0.01 ? 4 : 2)}%)
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline justify-between gap-1.5 pt-1">
+                      <span className="text-cyan-300">◇ 中位</span>
+                      <span className="tabular-nums">
+                        T{medianIdx + 1} ({(medianTier.n/denom*100).toFixed(medianTier.n/denom < 0.01 ? 4 : 2)}%)
+                      </span>
+                    </div>
+                  </div>
+                ) : <div className="text-[11px] opacity-60">無資料</div>}
+              </div>
+            </div>
+          )}
+
+          {/* 比較結論 */}
+          {!isDegenerate && tierIdx >= 0 && expInfo && (
+            <div className="text-[11px] mb-3 px-1 space-y-1">
+              <div className="opacity-60 text-[10px]">你 vs 重新貼後期望落點</div>
+              {[
+                { sym: '★', name: '眾數',   color: 'text-blue-300',   diff: diffMode },
+                { sym: '✦', name: '加權平均', color: 'text-purple-300', diff: diffMean },
+                { sym: '◇', name: '中位',   color: 'text-cyan-300',   diff: diffMedian },
+              ].map(row => (
+                <div key={row.sym} className="flex items-center gap-2">
+                  <span className={row.color + ' shrink-0 w-16 tabular-nums'}>{row.sym} {row.name}</span>
+                  <span className={
+                    row.diff === null ? 'opacity-50' :
+                    row.diff > 0     ? 'text-green-400' :
+                    row.diff < 0     ? 'text-red-400'   :
+                                       'gold'
+                  }>{
+                    row.diff === null ? '無法比較' :
+                    row.diff === 0   ? '同層 (= 你)' :
+                    row.diff > 0     ? `你領先 ${row.diff} 階 (你機率較高)` :
+                                       `你落後 ${-row.diff} 階 (你機率較低)`
+                  }</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 完整對照表 */}
+          <div className="text-[10px] opacity-50 mb-1.5 text-center">
+            全 {total.toLocaleString()} 種 k={stampCount} 配置 · 共 {table.length} 個機率等級
+          </div>
+          <div className="rank-table-wrap overflow-y-auto rounded-lg border border-white/10" style={{maxHeight: '320px'}}>
+            <table className="w-full text-xs border-separate" style={{borderSpacing: 0}}>
+              <thead>
+                <tr className="text-[10px] opacity-80">
+                  <th className="rank-th px-2 py-1.5 text-right font-normal">P({goalShort})</th>
+                  <th className="rank-th px-2 py-1.5 text-right font-normal">分數</th>
+                  <th className="rank-th px-2 py-1.5 text-right font-normal">配置數</th>
+                  <th className="rank-th px-2 py-1.5 text-right font-normal">佔總%</th>
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {table.map((t, i) => {
+                  const isUser   = i === tierIdx;
+                  const isMode   = i === modeIdx;
+                  const isMean   = i === meanIdx;
+                  const isMedian = i === medianIdx;
+                  const hasMark  = isUser || isMode || isMean || isMedian;
+                  const pct = (t.n / denom) * 100;
+                  const pctConfigs = (t.c / total) * 100;
+                  const rowBg = isUser
+                    ? 'bg-amber-700/30 font-semibold'
+                    : (hasMark ? 'bg-white/[0.05]' : (i % 2 ? 'bg-white/[0.02]' : ''));
+                  return (
+                    <tr key={i} className={rowBg}>
+                      <td className="px-2 py-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-flex gap-0.5 text-[11px]">
+                            {isUser   && <span className="gold"           title="你的盤面">▶</span>}
+                            {isMode   && <span className="text-blue-400"   title="眾數 (最常落點)">★</span>}
+                            {isMean   && <span className="text-purple-400" title="加權平均">✦</span>}
+                            {isMedian && <span className="text-cyan-400"   title="中位">◇</span>}
+                          </span>
+                          <span>{pct.toFixed(pct < 1 ? 4 : 2)}%</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-1 text-right opacity-70">{t.n}/{denom}</td>
+                      <td className="px-2 py-1 text-right">{t.c.toLocaleString()}</td>
+                      <td className="px-2 py-1 text-right opacity-70">{pctConfigs.toFixed(2)}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 圖例 */}
+          <div className="text-[10px] opacity-60 mt-3 px-1 leading-relaxed">
+            <div className="font-semibold opacity-80 mb-1">符號說明</div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+              <div><span className="gold">▶</span> 你的盤面</div>
+              <div><span className="text-blue-400">★</span> 眾數 — 最常落點</div>
+              <div><span className="text-purple-400">✦</span> 加權平均機率位置</div>
+              <div><span className="text-cyan-400">◇</span> 中位 — 第 50 百分位</div>
+            </div>
+            <div className="mt-1.5 opacity-70">
+              Tier 1 = 機率最高 · 數字愈小排名愈前 · 「領先 N 階」= 你比期望位置高 N 個 Tier
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 /* 天書奇談模擬器 — Service Worker (offline cache) */
-const CACHE = 'wondrous-tails-v14';
+const CACHE = 'wondrous-tails-v1.0';
 const ASSETS = [
   './',
   './index.html',

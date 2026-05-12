@@ -41,22 +41,6 @@
 
 　
 
-## 🚀 本機執行
-
-由於 Service Worker 不允許在 `file://` 協定下運作,本機測試請透過 HTTP server:
-
-```bash
-# Python 3
-python -m http.server 8000
-
-# 或 Node
-npx serve .
-```
-
-接著瀏覽器開啟 `http://localhost:8000`。
-
-　
-
 ## 🎲 演算法說明
 
 ### 連線判定
