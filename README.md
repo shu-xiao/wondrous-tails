@@ -65,6 +65,7 @@
 - [Wondrous Tails Analysis: When Should You Shuffle?](https://www.reddit.com/r/ffxiv/comments/550lo8/wondrous_tails_analysis_when_should_you_shuffle/) — Reddit 社群分析
 - [Wondrous Tails Solver — Morpheusz](http://ffxiv.morpheusz.com/p/wondrous-tails-solver.html)
 - [FF14 天書奇談計算器 — cycleapple](https://cycleapple.github.io/xiv-tc-wondrous-tails/) — UI 與決策表參考
+- [Cactpot Solver / 仙人微彩計算器 — Raraku](https://rarakumoai.github.io/cactpot-solver/) — 提供靈感
 
 　
 

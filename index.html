@@ -46,7 +46,14 @@
   }
 
   html, body { background: var(--bg); color: var(--fg); transition: background .2s ease, color .2s ease; }
-  body { font-family: -apple-system, "Segoe UI", "Noto Sans TC", system-ui, sans-serif; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Noto Sans TC", system-ui, sans-serif;
+    /* iOS 瀏海/Dynamic Island 機型的 safe-area 內距 */
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
   .gold { color: var(--gold); }
   .panel { background: var(--panel-bg); border: 1px solid var(--panel-border); }
   .cell {
@@ -282,11 +289,13 @@ function expectedRankInfo(stampCount, goal) {
 }
 
 /* ────────── 目標策略 ────────── */
+/* 註: metric 欄位目前未直接使用 (metricValue 用 if/else 分支),
+   保留是為了未來想改寫成資料驅動時的 schema 提示。 */
 const STRATEGIES = {
   balanced: { label: '平衡',   desc: '加權期望線數',   metric: 'expected' },
   bronze:   { label: '銅 ≥1', desc: '至少 1 線機率',  metric: 'ge1' },
   silver:   { label: '銀 ≥2', desc: '至少 2 線機率',  metric: 'ge2' },
-  gold:     { label: '金 = 3','desc': '正好 3 線機率',  metric: 'eq3' },
+  gold:     { label: '金 ≥3', desc: '正好 3 線機率',  metric: 'eq3' },
 };
 
 function metricValue(dist, strategy) {
@@ -379,7 +388,13 @@ function App() {
     window.location.reload();
   }
   const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem('wt-theme') || 'dark'; } catch { return 'dark'; }
+    try {
+      const stored = localStorage.getItem('wt-theme');
+      if (stored === 'dark' || stored === 'light') return stored;
+      // 沒設過 → 跟隨系統偏好
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
+      return 'dark';
+    } catch { return 'dark'; }
   });
 
   /* 將 theme 套用到 <html>,並寫入 localStorage */
@@ -1123,8 +1138,6 @@ function CumChip({label, cur, base, reward, highlight}) {
   const showDelta = Math.abs(delta) > 0.0005;
   return (
     <div className={'panel rounded-xl p-2.5 text-center ' + (highlight?'border-amber-700/40':'')}>
-      <div className="text-[10px] opacity-50 mb-0.5">{reward && <span className="mr-1 gold">{reward}</span>}{label}</div>
-      <div className="text-base font-semibold gold tabular-nums">{(cur*100).toFixed(2)}%</div>
       <div className="text-[10px] opacity-60 tabular-nums">
         基準 {(base*100).toFixed(2)}%
         {showDelta && (
