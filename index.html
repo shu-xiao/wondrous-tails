@@ -272,19 +272,26 @@ function expectedRankInfo(stampCount, goal) {
     if (d < meanDiff) { meanIdx = i; meanDiff = d; }
   }
 
-  // 中位:累積配置數達一半的 tier (從機率高的端累積)
-  let cum = 0;
-  const half = total / 2;
-  let medianIdx = tiers.length - 1;
-  for (let i = 0; i < tiers.length; i++) {
-    cum += tiers[i].c;
-    if (cum >= half) { medianIdx = i; break; }
+  // 通用百分位 (從機率高的端累積)
+  // pct=0.5 即中位數;pct=0.1 即前 10% 的下界 (top 10% boundary)
+  function pctileIdx(pct) {
+    const threshold = total * pct;
+    let cum = 0;
+    for (let i = 0; i < tiers.length; i++) {
+      cum += tiers[i].c;
+      if (cum >= threshold) return i;
+    }
+    return tiers.length - 1;
   }
 
   return {
     modeIdx, modePct: tiers[modeIdx].c / total,
     meanIdx, meanProb,
-    medianIdx,
+    medianIdx: pctileIdx(0.5),
+    p10Idx:    pctileIdx(0.10),   // 前 10% 的下界 (top 10% boundary,機率較高那端)
+    q1Idx:     pctileIdx(0.25),   // 下四分位點 (Q1,從機率高端起算 25%)
+    q3Idx:     pctileIdx(0.75),   // 上四分位點 (Q3,75%)
+    p90Idx:    pctileIdx(0.90),   // 後 10% 的下界 (bottom 10% boundary,機率較低那端)
   };
 }
 
@@ -367,7 +374,7 @@ function App() {
   const [future, setFuture]     = useState([]);   // future states for redo
   const [showLines, setShowLines]       = useState(true);
   const [showStrategy, setShowStrategy] = useState(false);
-  const [showRank, setShowRank]         = useState(false);
+  const [showRank, setShowRank]         = useState(true);
   const [rankGoal, setRankGoal]         = useState('ge3');  // 'ge1' | 'ge2' | 'ge3'
   const [showAbout, setShowAbout]       = useState(false);
   const [strategy, setStrategy] = useState('balanced');
@@ -403,6 +410,19 @@ function App() {
     html.classList.toggle('light', theme === 'light');
     try { localStorage.setItem('wt-theme', theme); } catch {}
   }, [theme]);
+
+  /* 全局排名面板的標記顯示設定 (使用者可選) */
+  const DEFAULT_MARKERS = { mode:true, mean:true, median:true, p10:false, q1:false, q3:false, p90:false };
+  const [markers, setMarkers] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('wt-markers') || 'null');
+      if (saved && typeof saved === 'object') return { ...DEFAULT_MARKERS, ...saved };
+    } catch {}
+    return DEFAULT_MARKERS;
+  });
+  useEffect(() => {
+    try { localStorage.setItem('wt-markers', JSON.stringify(markers)); } catch {}
+  }, [markers]);
 
   const stampCount = stamps.size;
   const lines      = useMemo(() => completedLines(stamps), [stamps]);
@@ -668,6 +688,8 @@ function App() {
         setGoal={setRankGoal}
         show={showRank}
         setShow={setShowRank}
+        markers={markers}
+        setMarkers={setMarkers}
       />
 
       {/* 7 貼紙決策法 (可摺疊) */}
@@ -736,7 +758,7 @@ function App() {
         </button>
 
         <div className="flex flex-col items-center gap-1">
-          <div className="gold text-[10px] font-mono opacity-60 tabular-nums">版本 v1.0 · 2026-05-12 (UTC+8)</div>
+          <div className="gold text-[10px] font-mono opacity-60 tabular-nums">版本 v1.1.1 · 2026-05-16 (UTC+8)</div>
           <div className="text-[10px] opacity-30 scale-90 select-none">純前端 · 不蒐集任何資料 · FINAL FANTASY XIV © SQUARE ENIX</div>
         </div>
 
@@ -885,8 +907,18 @@ function ProbCard({title, subtitle, dist, baseline, active}) {
   );
 }
 
-/* 全局排名面板 */
-function RankPanel({stampCount, dist, goal, setGoal, show, setShow}) {
+/* 全局排名面板 — markers/setMarkers 由 App 提供,使用者可選顯示哪些指標 */
+const MARKER_INFO = [
+  { key: 'mode',   sym: '★', name: '眾數',     color: 'text-blue-400'   },
+  { key: 'mean',   sym: '✦', name: '加權平均', color: 'text-purple-400' },
+  { key: 'median', sym: '◇', name: '中位 50%', color: 'text-cyan-400'   },
+  { key: 'p10',    sym: '↟', name: '前 10%',   color: 'text-emerald-400'},
+  { key: 'q1',     sym: '◔', name: 'Q1 (25%)', color: 'text-teal-400'   },
+  { key: 'q3',     sym: '◕', name: 'Q3 (75%)', color: 'text-orange-400' },
+  { key: 'p90',    sym: '↡', name: '後 10%',   color: 'text-rose-400'   },
+];
+
+function RankPanel({stampCount, dist, goal, setGoal, show, setShow, markers, setMarkers}) {
   const info = React.useMemo(
     () => rankInfo(stampCount, dist, goal),
     [stampCount, dist, goal]
@@ -895,30 +927,29 @@ function RankPanel({stampCount, dist, goal, setGoal, show, setShow}) {
     () => expectedRankInfo(stampCount, goal),
     [stampCount, goal]
   );
+  const [showSettings, setShowSettings] = useState(false);
   if (!info) return null;
 
   const { table, denom, total, userNumer, tierIdx, tierCount, strictlyWorse, strictlyBetter, pctWorseOrEqual } = info;
   const userProb = denom > 0 ? userNumer / denom : 0;
-
-  // 期望落點(若計算失敗則 null)
-  const modeIdx = expInfo ? expInfo.modeIdx : -1;
-  const meanIdx = expInfo ? expInfo.meanIdx : -1;
-  const medianIdx = expInfo ? expInfo.medianIdx : -1;
   const tierOf = (i) => (i >= 0 && i < table.length) ? table[i] : null;
-  const modeTier   = tierOf(modeIdx);
-  const meanTier   = tierOf(meanIdx);
-  const medianTier = tierOf(medianIdx);
 
-  // 比較:你的 tier 比期望好多少 (數字小 = 排名靠前 = 機率高)
-  const diffVs = (i) => (tierIdx >= 0 && i >= 0) ? (i - tierIdx) : null;
-  const diffMode   = diffVs(modeIdx);
-  const diffMean   = diffVs(meanIdx);
-  const diffMedian = diffVs(medianIdx);
-  const formatDiff = (d) => {
-    if (d === null) return '';
-    if (d === 0) return '= 你';
-    return d > 0 ? `你領先 ${d} 階` : `你落後 ${-d} 階`;
-  };
+  // 把每個 marker 的 tier idx 收集到一個 lookup
+  const idxOf = expInfo ? {
+    mode:   expInfo.modeIdx,
+    mean:   expInfo.meanIdx,
+    median: expInfo.medianIdx,
+    p10:    expInfo.p10Idx,
+    q1:     expInfo.q1Idx,
+    q3:     expInfo.q3Idx,
+    p90:    expInfo.p90Idx,
+  } : {};
+
+  // 你的 tier 比期望好多少 (idx 數字小 = 排名靠前 = 機率高)
+  const diffVs = (i) => (tierIdx >= 0 && typeof i === 'number' && i >= 0) ? (i - tierIdx) : null;
+
+  // 啟用的 markers 清單 (依 MARKER_INFO 順序)
+  const enabledMarkers = MARKER_INFO.filter(m => markers[m.key]);
 
   const isDegenerate = table.length === 1;
 
@@ -932,18 +963,30 @@ function RankPanel({stampCount, dist, goal, setGoal, show, setShow}) {
 
   return (
     <div className="panel rounded-2xl mb-4">
-      <button
-        onClick={()=>setShow(s=>!s)}
-        className="flex items-center justify-between w-full text-left p-4"
-        aria-expanded={show}
-      >
-        <span className="flex items-center gap-2 font-semibold gold">
+      {/* 標題列:左 = 展開切換 (全局排名 · k=N) / 中 = 排名摘要 / 右 = ⚙ 顯示指標 */}
+      <div className="flex items-center gap-2 p-4">
+        <button
+          onClick={()=>setShow(s=>!s)}
+          className="flex items-center gap-2 font-semibold gold shrink-0 text-left"
+          aria-expanded={show}
+        >
           <span className={'inline-block transition-transform text-xs ' + (show?'':'-rotate-90')}>▼</span>
-          全局排名
-          <span className="text-xs opacity-60 font-normal">· k={stampCount} · {goalShort}</span>
+          <span className="whitespace-nowrap">全局排名</span>
+          <span className="text-xs opacity-60 font-normal whitespace-nowrap">· k={stampCount}</span>
+        </button>
+        <span className="text-[11px] opacity-70 tabular-nums flex-1 text-center truncate px-1" title={rankSummary}>
+          {rankSummary}
         </span>
-        <span className="text-[11px] opacity-70 tabular-nums">{rankSummary}</span>
-      </button>
+        <button
+          onClick={() => { setShow(true); setShowSettings(s=>!s); }}
+          className={'flex items-center gap-1 px-2 py-1 rounded hover:bg-white/5 shrink-0 transition-colors ' + (showSettings ? 'text-amber-400' : 'opacity-70 hover:opacity-100')}
+          title="顯示哪些指標 (眾數 / 平均 / 中位 / Q1 / Q3 / P10 / P90)"
+          aria-label="指標顯示設定"
+        >
+          <span className="text-base leading-none">⚙</span>
+          <span className="text-xs whitespace-nowrap">顯示指標</span>
+        </button>
+      </div>
 
       {show && (
         <div className="px-4 pb-4">
@@ -972,6 +1015,36 @@ function RankPanel({stampCount, dist, goal, setGoal, show, setShow}) {
               );
             })}
           </div>
+
+          {/* 顯示設定 (由標題列 ⚙ 控制) */}
+          {showSettings && (
+            <div className="mb-3 p-3 rounded-lg bg-white/5 border border-white/10">
+              <div className="flex items-center justify-between mb-2 text-xs opacity-80">
+                <span className="font-semibold">顯示哪些指標 ({enabledMarkers.length}/{MARKER_INFO.length})</span>
+                <button
+                  onClick={()=>setShowSettings(false)}
+                  className="text-xs opacity-60 hover:opacity-100 px-2"
+                  aria-label="關閉設定"
+                >✕</button>
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                {MARKER_INFO.map(m => (
+                  <label key={m.key} className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!markers[m.key]}
+                      onChange={e => setMarkers(prev => ({ ...prev, [m.key]: e.target.checked }))}
+                    />
+                    <span className={m.color + ' font-semibold w-3 text-center'}>{m.sym}</span>
+                    <span className="opacity-80">{m.name}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="text-[10px] opacity-50 mt-2">
+                勾選後會在「重新貼期望」/「比較結論」/「對照表」/「符號說明」四處同步顯示對應標記
+              </div>
+            </div>
+          )}
 
           {/* 排名摘要卡 — 你 vs 重新貼期望落點 */}
           {isDegenerate ? (
@@ -1005,62 +1078,60 @@ function RankPanel({stampCount, dist, goal, setGoal, show, setShow}) {
                 )}
               </div>
 
-              {/* 重新貼後期望落點 (3 個指標) */}
+              {/* 重新貼後期望落點 — 依使用者選的 markers 顯示 */}
               <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3">
-                <div className="text-[10px] opacity-60 mb-1">◇ 重新貼期望</div>
-                {expInfo && modeTier && meanTier && medianTier ? (
+                <div className="text-[10px] opacity-60 mb-1">◇ 重新貼期望落點</div>
+                {expInfo && enabledMarkers.length > 0 ? (
                   <div className="space-y-0.5 text-[11px]">
-                    <div className="flex items-baseline justify-between gap-1.5">
-                      <span className="text-blue-300">★ 眾數</span>
-                      <span className="tabular-nums">
-                        T{modeIdx + 1} ({(modeTier.n/denom*100).toFixed(modeTier.n/denom < 0.01 ? 4 : 2)}%)
-                      </span>
-                    </div>
-                    <div className="text-[9px] opacity-50 -mt-1 ml-3">{(expInfo.modePct*100).toFixed(1)}% 機率落到</div>
-
-                    <div className="flex items-baseline justify-between gap-1.5 pt-1">
-                      <span className="text-purple-300">✦ 平均</span>
-                      <span className="tabular-nums">
-                        T{meanIdx + 1} ({(expInfo.meanProb*100).toFixed(expInfo.meanProb < 0.01 ? 4 : 2)}%)
-                      </span>
-                    </div>
-
-                    <div className="flex items-baseline justify-between gap-1.5 pt-1">
-                      <span className="text-cyan-300">◇ 中位</span>
-                      <span className="tabular-nums">
-                        T{medianIdx + 1} ({(medianTier.n/denom*100).toFixed(medianTier.n/denom < 0.01 ? 4 : 2)}%)
-                      </span>
-                    </div>
+                    {enabledMarkers.map(m => {
+                      const i = idxOf[m.key];
+                      const tier = tierOf(i);
+                      if (!tier) return null;
+                      const pct = tier.n / denom;
+                      // 平均的話另外顯示加權機率 (而非 tier 的 n/denom)
+                      const showProb = m.key === 'mean' && expInfo.meanProb !== undefined
+                        ? expInfo.meanProb
+                        : pct;
+                      return (
+                        <div key={m.key} className="flex items-baseline justify-between gap-1.5">
+                          <span className={m.color}>{m.sym} {m.name}</span>
+                          <span className="tabular-nums">
+                            T{i + 1} ({(showProb*100).toFixed(showProb < 0.01 ? 4 : 2)}%)
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
+                ) : enabledMarkers.length === 0 ? (
+                  <div className="text-[11px] opacity-50">未選任何指標 (點 ⚙ 開啟)</div>
                 ) : <div className="text-[11px] opacity-60">無資料</div>}
               </div>
             </div>
           )}
 
-          {/* 比較結論 */}
-          {!isDegenerate && tierIdx >= 0 && expInfo && (
+          {/* 比較結論 — 你 vs 各 marker 的 tier 差 */}
+          {!isDegenerate && tierIdx >= 0 && expInfo && enabledMarkers.length > 0 && (
             <div className="text-[11px] mb-3 px-1 space-y-1">
               <div className="opacity-60 text-[10px]">你 vs 重新貼後期望落點</div>
-              {[
-                { sym: '★', name: '眾數',   color: 'text-blue-300',   diff: diffMode },
-                { sym: '✦', name: '加權平均', color: 'text-purple-300', diff: diffMean },
-                { sym: '◇', name: '中位',   color: 'text-cyan-300',   diff: diffMedian },
-              ].map(row => (
-                <div key={row.sym} className="flex items-center gap-2">
-                  <span className={row.color + ' shrink-0 w-16 tabular-nums'}>{row.sym} {row.name}</span>
-                  <span className={
-                    row.diff === null ? 'opacity-50' :
-                    row.diff > 0     ? 'text-green-400' :
-                    row.diff < 0     ? 'text-red-400'   :
-                                       'gold'
-                  }>{
-                    row.diff === null ? '無法比較' :
-                    row.diff === 0   ? '同層 (= 你)' :
-                    row.diff > 0     ? `你領先 ${row.diff} 階 (你機率較高)` :
-                                       `你落後 ${-row.diff} 階 (你機率較低)`
-                  }</span>
-                </div>
-              ))}
+              {enabledMarkers.map(m => {
+                const diff = diffVs(idxOf[m.key]);
+                return (
+                  <div key={m.key} className="flex items-center gap-2">
+                    <span className={m.color + ' shrink-0 w-20 tabular-nums text-[11px]'}>{m.sym} {m.name}</span>
+                    <span className={
+                      diff === null ? 'opacity-50' :
+                      diff > 0     ? 'text-green-400' :
+                      diff < 0     ? 'text-red-400'   :
+                                     'gold'
+                    }>{
+                      diff === null ? '無法比較' :
+                      diff === 0   ? '同層 (= 你)' :
+                      diff > 0     ? `你領先 ${diff} 階 (你機率較高)` :
+                                     `你落後 ${-diff} 階 (你機率較低)`
+                    }</span>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -1080,11 +1151,10 @@ function RankPanel({stampCount, dist, goal, setGoal, show, setShow}) {
               </thead>
               <tbody className="tabular-nums">
                 {table.map((t, i) => {
-                  const isUser   = i === tierIdx;
-                  const isMode   = i === modeIdx;
-                  const isMean   = i === meanIdx;
-                  const isMedian = i === medianIdx;
-                  const hasMark  = isUser || isMode || isMean || isMedian;
+                  const isUser = i === tierIdx;
+                  // 找出這列命中的 markers
+                  const hits = enabledMarkers.filter(m => idxOf[m.key] === i);
+                  const hasMark = isUser || hits.length > 0;
                   const pct = (t.n / denom) * 100;
                   const pctConfigs = (t.c / total) * 100;
                   const rowBg = isUser
@@ -1095,10 +1165,10 @@ function RankPanel({stampCount, dist, goal, setGoal, show, setShow}) {
                       <td className="px-2 py-1">
                         <div className="flex items-center justify-between gap-2">
                           <span className="inline-flex gap-0.5 text-[11px]">
-                            {isUser   && <span className="gold"           title="你的盤面">▶</span>}
-                            {isMode   && <span className="text-blue-400"   title="眾數 (最常落點)">★</span>}
-                            {isMean   && <span className="text-purple-400" title="加權平均">✦</span>}
-                            {isMedian && <span className="text-cyan-400"   title="中位">◇</span>}
+                            {isUser && <span className="gold" title="你的盤面">▶</span>}
+                            {hits.map(m => (
+                              <span key={m.key} className={m.color} title={m.name}>{m.sym}</span>
+                            ))}
                           </span>
                           <span>{pct.toFixed(pct < 1 ? 4 : 2)}%</span>
                         </div>
@@ -1113,17 +1183,28 @@ function RankPanel({stampCount, dist, goal, setGoal, show, setShow}) {
             </table>
           </div>
 
-          {/* 圖例 */}
+          {/* 圖例 — 動態,只顯示啟用的 markers */}
           <div className="text-[10px] opacity-60 mt-3 px-1 leading-relaxed">
             <div className="font-semibold opacity-80 mb-1">符號說明</div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
               <div><span className="gold">▶</span> 你的盤面</div>
-              <div><span className="text-blue-400">★</span> 眾數 — 最常落點</div>
-              <div><span className="text-purple-400">✦</span> 加權平均機率位置</div>
-              <div><span className="text-cyan-400">◇</span> 中位 — 第 50 百分位</div>
+              {enabledMarkers.map(m => (
+                <div key={m.key}>
+                  <span className={m.color}>{m.sym}</span>
+                  {' '}
+                  {m.name}
+                  {m.key === 'mode'   ? ' — 最常落點' :
+                   m.key === 'mean'   ? ' — 加權平均機率位置' :
+                   m.key === 'median' ? ' — 第 50 百分位' :
+                   m.key === 'p10'    ? ' — 第 10 百分位 (機率較高那端)' :
+                   m.key === 'q1'     ? ' — 第 25 百分位' :
+                   m.key === 'q3'     ? ' — 第 75 百分位' :
+                   m.key === 'p90'    ? ' — 第 90 百分位 (機率較低那端)' : ''}
+                </div>
+              ))}
             </div>
             <div className="mt-1.5 opacity-70">
-              Tier 1 = 機率最高 · 數字愈小排名愈前 · 「領先 N 階」= 你比期望位置高 N 個 Tier
+              Tier 1 = 機率最高 · 數字愈小排名愈前 · 「領先 N 階」= 你比期望位置高 N 個 Tier · 百分位由機率高端起算
             </div>
           </div>
         </div>
