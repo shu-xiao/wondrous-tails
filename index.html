@@ -140,6 +140,33 @@ function completedLines(stamped) {
   return out;
 }
 
+/* ───── bitmask 版 (給 balanced 重骰勝率 on-the-fly 用) ───── */
+const LINES_MASK = LINES.map(L => L.reduce((m,c) => m | (1 << c), 0));
+
+function countLinesMask(mask) {
+  let n = 0;
+  for (let i = 0; i < LINES_MASK.length; i++) {
+    if ((mask & LINES_MASK[i]) === LINES_MASK[i]) n++;
+  }
+  return n;
+}
+
+/* 給定 k 貼紙 bitmask,期望線數 = 平均所有 (9-k) 隨機補滿後的線數 */
+function expectedScoreMask(mask, k) {
+  const need = 9 - k;
+  if (need <= 0) return countLinesMask(mask);
+  const empty = [];
+  for (let i = 0; i < 16; i++) if (!((mask >> i) & 1)) empty.push(i);
+  let totalLines = 0, totalConfigs = 0;
+  for (const combo of combinations(empty, need)) {
+    let full = mask;
+    for (const c of combo) full |= (1 << c);
+    totalLines += countLinesMask(full);
+    totalConfigs++;
+  }
+  return totalLines / totalConfigs;
+}
+
 function* combinations(arr, k) {
   const n = arr.length;
   if (k > n) return;
@@ -295,6 +322,53 @@ function expectedRankInfo(stampCount, goal) {
   };
 }
 
+/* ────────── 重骰勝率 ──────────
+ * 對於同樣 k 貼紙,計算「重新隨機分配後,新盤面在當前策略下的指標
+ * 嚴格大於目前盤面的機率」。重骰是 C(16,k) 種等機率,所以:
+ *   P(贏) = #{config : metric(config) > metric(current)} / C(16,k)
+ *
+ * bronze/silver/gold 三策略可直接用 RANK_TABLES 的 strictlyBetter (極快)
+ * balanced 沒對應的預計算表,用 bitmask on-the-fly 算 (k=4,5 最慢約 200ms)
+ */
+function reshuffleWinRate(stampCount, dist, strategy, stamps) {
+  if (stampCount <= 0 || stampCount >= 16) return null;
+
+  // bronze/silver/gold: 直接抽 rankInfo
+  const goalMap = { bronze: 'ge1', silver: 'ge2', gold: 'ge3' };
+  if (goalMap[strategy]) {
+    const info = rankInfo(stampCount, dist, goalMap[strategy]);
+    if (!info) return null;
+    const tie = info.total - info.strictlyBetter - info.strictlyWorse;
+    return {
+      better: info.strictlyBetter,
+      worse:  info.strictlyWorse,
+      tie,
+      total:  info.total,
+      prob:   info.strictlyBetter / info.total,
+    };
+  }
+
+  // balanced: on-the-fly 比較期望線數
+  if (strategy === 'balanced') {
+    let curMask = 0;
+    for (const c of stamps) curMask |= (1 << c);
+    const curExp = expectedScoreMask(curMask, stampCount);
+    let better = 0, worse = 0, tie = 0, total = 0;
+    const cells = Array.from({length:16},(_,i)=>i);
+    for (const combo of combinations(cells, stampCount)) {
+      let mask = 0;
+      for (const c of combo) mask |= (1 << c);
+      const sc = expectedScoreMask(mask, stampCount);
+      if      (sc > curExp + 1e-9) better++;
+      else if (sc < curExp - 1e-9) worse++;
+      else                          tie++;
+      total++;
+    }
+    return { better, worse, tie, total, prob: better / total };
+  }
+  return null;
+}
+
 /* ────────── 目標策略 ────────── */
 /* 註: metric 欄位目前未直接使用 (metricValue 用 if/else 分支),
    保留是為了未來想改寫成資料驅動時的 schema 提示。 */
@@ -433,6 +507,10 @@ function App() {
   const advice     = useMemo(
     () => suggestion(stampCount, lines.length, potential, exp.dist, strategy),
     [stampCount, lines, potential, exp, strategy]
+  );
+  const winRate    = useMemo(
+    () => reshuffleWinRate(stampCount, exp.dist, strategy, stamps),
+    [stampCount, exp, strategy, stamps]
   );
   const expectedLines = useMemo(() => expectedScore(exp.dist), [exp]);
 
@@ -630,6 +708,37 @@ function App() {
             </div>
           </div>
         </div>
+
+        {/* 重骰勝率 — 隨機重貼後新盤面在當前策略指標下嚴格 > 目前的機率 */}
+        {winRate && (
+          <div className="mt-3 pt-3 border-t border-white/10">
+            <div className="flex items-baseline justify-between gap-2 text-xs">
+              <span className="opacity-70">
+                🎲 重骰會嚴格變好的機率
+                <span className="opacity-50 ml-1">({STRATEGIES[strategy].desc})</span>
+              </span>
+              <span className="tabular-nums shrink-0">
+                <span
+                  className="text-base font-semibold"
+                  style={{color:
+                    winRate.prob >= 0.5 ? '#FF7043' :  /* 建議重貼 */
+                    winRate.prob >= 0.2 ? '#78909C' :  /* 差不多 */
+                                          '#5C6BC0'    /* 不要重貼 */
+                  }}
+                >{(winRate.prob*100).toFixed(2)}%</span>
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 text-[10px] opacity-70 mt-1 tabular-nums">
+              <span>
+                <span className="opacity-60">配置數 </span>
+                <span style={{color: '#FF7043'}}>勝 {winRate.better.toLocaleString()}</span>
+                {winRate.tie > 0 && <span style={{color: '#78909C'}}> · 平 {winRate.tie.toLocaleString()}</span>}
+                <span style={{color: '#5C6BC0'}}> · 敗 {winRate.worse.toLocaleString()}</span>
+              </span>
+              <span className="opacity-60">共 {winRate.total.toLocaleString()} 種重骰結果</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 操作 — 順序: 隨機生成 (左) / 重新貼 (中,主) / 重置 (右,警示) */}
@@ -758,7 +867,7 @@ function App() {
         </button>
 
         <div className="flex flex-col items-center gap-1">
-          <div className="gold text-[10px] font-mono opacity-60 tabular-nums">版本 v1.1.4 · 2026-05-16 (UTC+8)</div>
+          <div className="gold text-[10px] font-mono opacity-60 tabular-nums">版本 v1.2.0 · 2026-05-22 (UTC+8)</div>
           <div className="text-[10px] opacity-30 scale-90 select-none">純前端 · 不蒐集任何資料 · FINAL FANTASY XIV © SQUARE ENIX</div>
         </div>
 
@@ -1219,14 +1328,19 @@ function CumChip({label, cur, base, reward, highlight}) {
   const showDelta = Math.abs(delta) > 0.0005;
   return (
     <div className={'panel rounded-xl p-2.5 text-center ' + (highlight?'border-amber-700/40':'')}>
-      <div className="text-[10px] opacity-60 tabular-nums">
-        基準 {(base*100).toFixed(2)}%
+      <div className="text-[10px] opacity-60 mb-0.5">
+        <span className="opacity-80">{label}</span>
+        {reward && <span className="gold opacity-70 ml-1">· {reward}</span>}
+      </div>
+      <div className="text-base font-semibold tabular-nums">
+        {(cur*100).toFixed(2)}%
         {showDelta && (
-          <span className={'ml-1 ' + (delta > 0 ? 'text-green-400' : 'text-red-400')}>
+          <span className={'ml-1 text-[10px] ' + (delta > 0 ? 'text-green-400' : 'text-red-400')}>
             {delta > 0 ? '+' : ''}{(delta*100).toFixed(2)}
           </span>
         )}
       </div>
+      <div className="text-[10px] opacity-50 tabular-nums">基準 {(base*100).toFixed(2)}%</div>
     </div>
   );
 }

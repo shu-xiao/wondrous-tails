@@ -4,8 +4,8 @@
  *   2. index.html footer 的版本字串(搜 "版本 v")
  * BUILD 變動 → CACHE 名稱跟著變 → 觸發 activate 階段刪舊 cache。
  */
-const BUILD = '2026-05-16';            /* 發版日期,改這裡就好 */
-const VERSION = 'v1.1.4';              /* semver,人看得懂的版本 */
+const BUILD = '2026-05-22';            /* 發版日期,改這裡就好 */
+const VERSION = 'v1.2.0';              /* semver,人看得懂的版本 */
 const CACHE = `wondrous-tails-${VERSION}-${BUILD}`;
 const ASSETS = [
   './',
