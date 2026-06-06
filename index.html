@@ -502,8 +502,6 @@ function App() {
   const lines      = useMemo(() => completedLines(stamps), [stamps]);
   const potential  = useMemo(() => potentialLines(stamps), [stamps]);
   const exp        = useMemo(() => expectedDistribution(stamps), [stamps]);
-  const cum        = useMemo(() => cumulative(exp.dist), [exp]);
-  const cumBase    = useMemo(() => cumulative(RESHUFFLE_DIST), []);
   const advice     = useMemo(
     () => suggestion(stampCount, lines.length, potential, exp.dist, strategy),
     [stampCount, lines, potential, exp, strategy]
@@ -767,7 +765,7 @@ function App() {
         <Stat label="期望線數" value={expectedLines.toFixed(2)} hint="加權平均" />
       </div>
 
-      {/* 機率 — 左右並排,你的天書帶 ±% 偏差 */}
+      {/* 機率 — 左右並排,每列含「正好 X」(分佈) 與累積「≥X」,你的天書帶 ±% 偏差 */}
       <div className="mb-4">
         <h2 className="text-center font-semibold gold mb-3">完成機率</h2>
         <div className="grid grid-cols-2 gap-2">
@@ -775,17 +773,7 @@ function App() {
           <ProbCard title="平均值" subtitle="(重新貼後)" dist={RESHUFFLE_DIST} />
         </div>
         <div className="text-center text-[11px] opacity-50 mt-2">
-          假設剩下貼紙隨機分配 · 數字後 +/- 為與重新貼基準的差
-        </div>
-      </div>
-
-      {/* 累積機率 (≥1 / ≥2 / 3 線) */}
-      <div className="mb-4">
-        <h2 className="text-center font-semibold gold mb-2 text-sm">至少 N 線(累積機率)</h2>
-        <div className="grid grid-cols-3 gap-2">
-          <CumChip label="≥ 1 線" cur={cum.ge1} base={cumBase.ge1} reward="銅" />
-          <CumChip label="≥ 2 線" cur={cum.ge2} base={cumBase.ge2} reward="銀" />
-          <CumChip label="3 線"   cur={cum.eq3} base={cumBase.eq3} reward="金" highlight />
+          假設剩下貼紙隨機分配 ·「正好 X」為分佈、「≥X」為累積機率(銅≥1 / 銀≥2 / 金=3)· 數字後 +/− 為與重新貼基準的差
         </div>
       </div>
 
@@ -867,7 +855,7 @@ function App() {
         </button>
 
         <div className="flex flex-col items-center gap-1">
-          <div className="gold text-[10px] font-mono opacity-60 tabular-nums">版本 v1.2.0 · 2026-05-22 (UTC+8)</div>
+          <div className="gold text-[10px] font-mono opacity-60 tabular-nums">版本 v1.3.0 · 2026-06-06 (UTC+8)</div>
           <div className="text-[10px] opacity-30 scale-90 select-none">純前端 · 不蒐集任何資料 · FINAL FANTASY XIV © SQUARE ENIX</div>
         </div>
 
@@ -978,8 +966,14 @@ function Stat({label, value, hint}) {
   );
 }
 
-/* 機率卡: 帶 ±% 偏差 */
+/* 機率卡: 每列同時顯示「正好 X 線」(PMF) 與累積「≥X」(CDF),帶 ±% 偏差
+ * (合併自舊「完成機率」+「至少 N 線」兩面板,避免同一組數字重複呈現) */
 function ProbCard({title, subtitle, dist, baseline, active}) {
+  const cum    = cumulative(dist);
+  const cumB   = baseline ? cumulative(baseline) : null;
+  const reward = { 1: '銅', 2: '銀', 3: '金' };
+  const cumVal  = { 1: cum.ge1,  2: cum.ge2 };           // ≥3 == 正好 3,故只列 ≥1 / ≥2
+  const cumBVal = cumB ? { 1: cumB.ge1, 2: cumB.ge2 } : null;
   return (
     <div className={'panel rounded-2xl p-3 ' + (active?'border-amber-700/40':'')}>
       <div className="text-center mb-2">
@@ -992,22 +986,43 @@ function ProbCard({title, subtitle, dist, baseline, active}) {
           const v = dist[k];
           const delta = baseline ? (v - baseline[k]) : null;
           const showDelta = delta !== null && Math.abs(delta) > 0.0005;
+          const cv = (k === 1 || k === 2) ? cumVal[k] : null;
+          const cdelta = (cumBVal && cv !== null) ? (cumVal[k] - cumBVal[k]) : null;
+          const showCDelta = cdelta !== null && Math.abs(cdelta) > 0.0005;
           return (
             <div key={k}
-                 className={'flex items-center justify-between px-2.5 py-1.5 rounded ' + (
+                 className={'px-2.5 py-1.5 rounded ' + (
                    isGoal ? 'border border-amber-700/40 bg-amber-950/30' : 'bg-white/[0.03]'
                  )}>
-              <span className="text-[12px] opacity-75">{k} 條線</span>
-              <div className="flex items-baseline gap-1.5">
-                <span className={'text-sm font-semibold ' + (active?'':'opacity-80')}>
-                  {(v*100).toFixed(1)}%
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] opacity-75">
+                  正好 {k} 線
+                  {reward[k] && <span className="gold opacity-70 ml-1">· {reward[k]}{isGoal?' =3':''}</span>}
                 </span>
-                {showDelta && (
-                  <span className={'text-[10px] tabular-nums ' + (delta > 0 ? 'text-green-400' : 'text-red-400')}>
-                    {delta > 0 ? '+' : ''}{(delta*100).toFixed(1)}
+                <div className="flex items-baseline gap-1.5">
+                  <span className={'text-sm font-semibold ' + (active?'':'opacity-80')}>
+                    {(v*100).toFixed(1)}%
                   </span>
-                )}
+                  {showDelta && (
+                    <span className={'text-[10px] tabular-nums ' + (delta > 0 ? 'text-green-400' : 'text-red-400')}>
+                      {delta > 0 ? '+' : ''}{(delta*100).toFixed(1)}
+                    </span>
+                  )}
+                </div>
               </div>
+              {cv !== null && (
+                <div className="flex items-center justify-between text-[10px] opacity-55 mt-0.5">
+                  <span>累積 ≥ {k}</span>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="tabular-nums">{(cv*100).toFixed(1)}%</span>
+                    {showCDelta && (
+                      <span className={'tabular-nums ' + (cdelta > 0 ? 'text-green-400' : 'text-red-400')}>
+                        {cdelta > 0 ? '+' : ''}{(cdelta*100).toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
@@ -1323,28 +1338,6 @@ function RankPanel({stampCount, dist, goal, setGoal, show, setShow, markers, set
 }
 
 /* 累積機率 chip */
-function CumChip({label, cur, base, reward, highlight}) {
-  const delta = cur - base;
-  const showDelta = Math.abs(delta) > 0.0005;
-  return (
-    <div className={'panel rounded-xl p-2.5 text-center ' + (highlight?'border-amber-700/40':'')}>
-      <div className="text-[10px] opacity-60 mb-0.5">
-        <span className="opacity-80">{label}</span>
-        {reward && <span className="gold opacity-70 ml-1">· {reward}</span>}
-      </div>
-      <div className="text-base font-semibold tabular-nums">
-        {(cur*100).toFixed(2)}%
-        {showDelta && (
-          <span className={'ml-1 text-[10px] ' + (delta > 0 ? 'text-green-400' : 'text-red-400')}>
-            {delta > 0 ? '+' : ''}{(delta*100).toFixed(2)}
-          </span>
-        )}
-      </div>
-      <div className="text-[10px] opacity-50 tabular-nums">基準 {(base*100).toFixed(2)}%</div>
-    </div>
-  );
-}
-
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 
 if ('serviceWorker' in navigator) {

@@ -53,6 +53,11 @@ logs/
 tmp/
 temp/
 
+# ===== 產生物 (中間產物,須手動 inline 進 index.html,不版控以免與 inline 版 desync) =====
+rank_tables.js
+__pycache__/
+*.pyc
+
 # ===== 雜項 =====
 .history/
 .scratch/
