@@ -13,7 +13,17 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
+<script>
+  /* 鎖定 JSX classic runtime(輸出 React.createElement,用全域 React)。
+     Babel 8 起 @babel/preset-react 預設改成 automatic runtime,會產生
+     `import { jsx } from "react/jsx-runtime"`,在 inline <script type="text/babel">
+     會炸「Cannot use import statement outside a module」→ 整頁空白。
+     這裡顯式註冊一個強制 classic 的 react preset,與 Babel 版本無關。 */
+  Babel.registerPreset('react-classic', {
+    presets: [[Babel.availablePresets['react'], { runtime: 'classic' }]]
+  });
+</script>
 <style>
   /* ─── 主題色變數 ─── */
   :root {
@@ -119,7 +129,7 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel" data-presets="env,react">
+<script type="text/babel" data-presets="env,react-classic">
 const { useState, useMemo, useEffect, useCallback } = React;
 
 /* ────────── 棋盤 / 連線定義 ────────── */
@@ -512,6 +522,17 @@ function App() {
   );
   const expectedLines = useMemo(() => expectedScore(exp.dist), [exp]);
 
+  /* PR — 百分位排名:重用 rankInfo,綁定 rankGoal,常駐顯示。
+   * prPct = 嚴格勝過的配置比例 (strictlyWorse/total);k=0 等退化盤面 (只有 1 種機率等級) 顯示 — */
+  const prInfo = useMemo(
+    () => rankInfo(stampCount, exp.dist, rankGoal),
+    [stampCount, exp, rankGoal]
+  );
+  const prPct = (prInfo && prInfo.table.length > 1)
+    ? (prInfo.strictlyWorse / prInfo.total) * 100
+    : null;
+  const prGoalLabel = { ge1: '銅 ≥1', ge2: '銀 ≥2', ge3: '金 =3' }[rankGoal];
+
   const lineCells = useMemo(() => {
     if (!showLines) return new Set();
     const s = new Set();
@@ -759,10 +780,11 @@ function App() {
       </div>
 
       {/* 統計 */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
         <Stat label="目前連線" value={lines.length} />
         <Stat label="潛在連線" value={potential} hint="最佳情況" />
         <Stat label="期望線數" value={expectedLines.toFixed(2)} hint="加權平均" />
+        <Stat label="PR 百分位" value={prPct === null ? '—' : prPct.toFixed(1) + '%'} hint={'勝過 · ' + prGoalLabel} />
       </div>
 
       {/* 機率 — 左右並排,每列含「正好 X」(分佈) 與累積「≥X」,你的天書帶 ±% 偏差 */}
@@ -855,7 +877,7 @@ function App() {
         </button>
 
         <div className="flex flex-col items-center gap-1">
-          <div className="gold text-[10px] font-mono opacity-60 tabular-nums">版本 v1.3.0 · 2026-06-06 (UTC+8)</div>
+          <div className="gold text-[10px] font-mono opacity-60 tabular-nums">版本 v1.4.1 · 2026-06-16 (UTC+8)</div>
           <div className="text-[10px] opacity-30 scale-90 select-none">純前端 · 不蒐集任何資料 · FINAL FANTASY XIV © SQUARE ENIX</div>
         </div>
 
@@ -1051,6 +1073,23 @@ function RankPanel({stampCount, dist, goal, setGoal, show, setShow, markers, set
     () => expectedRankInfo(stampCount, goal),
     [stampCount, goal]
   );
+  /* PR · 三目標百分位:銅/銀/金 各跑一次 rankInfo,列出「勝過的配置比例」。
+   * 與 goal 無關(三個都算),放在對照表上方常駐列出。 */
+  const prRows = React.useMemo(() => (
+    [{ g: 'ge1', label: '銅 ≥1' }, { g: 'ge2', label: '銀 ≥2' }, { g: 'ge3', label: '金 =3' }]
+      .map(({ g, label }) => {
+        const ri = rankInfo(stampCount, dist, g);
+        if (!ri) return { g, label, prob: null, pr: null, tier: null, len: null };
+        const deg = ri.table.length <= 1;
+        return {
+          g, label,
+          prob: ri.userNumer / ri.denom,
+          pr:   deg ? null : (ri.strictlyWorse / ri.total) * 100,
+          tier: (!deg && ri.tierIdx >= 0) ? ri.tierIdx + 1 : null,
+          len:  deg ? null : ri.table.length,
+        };
+      })
+  ), [stampCount, dist]);
   const [showSettings, setShowSettings] = useState(false);
   if (!info) return null;
 
@@ -1303,6 +1342,34 @@ function RankPanel({stampCount, dist, goal, setGoal, show, setShow, markers, set
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* PR · 三目標百分位(銅/銀/金)— 勝過多少比例的同 k 盤面(放在完整對照表下方) */}
+          <div className="mb-3 mt-3">
+            <div className="text-[10px] opacity-50 mb-1.5 text-center">PR · 百分位(勝過的配置比例)· k={stampCount}</div>
+            <table className="w-full text-xs border-separate" style={{borderSpacing: 0}}>
+              <thead>
+                <tr className="text-[10px] opacity-80">
+                  <th className="rank-th px-2 py-1.5 text-left font-normal">目標</th>
+                  <th className="rank-th px-2 py-1.5 text-right font-normal">P(達成)</th>
+                  <th className="rank-th px-2 py-1.5 text-right font-normal">PR 勝過</th>
+                  <th className="rank-th px-2 py-1.5 text-right font-normal">Tier</th>
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {prRows.map(r => (
+                  <tr key={r.g} className={r.g === goal ? 'bg-amber-700/30 font-semibold' : ''}>
+                    <td className="px-2 py-1 text-left">
+                      {r.g === goal && <span className="gold mr-1" title="目前目標">▶</span>}
+                      {r.label}
+                    </td>
+                    <td className="px-2 py-1 text-right opacity-70">{r.prob === null ? '—' : (r.prob * 100).toFixed(2) + '%'}</td>
+                    <td className="px-2 py-1 text-right">{r.pr === null ? '—' : r.pr.toFixed(1) + '%'}</td>
+                    <td className="px-2 py-1 text-right opacity-70">{r.tier === null ? '—' : r.tier + '/' + r.len}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

@@ -4,8 +4,8 @@
  *   2. index.html footer 的版本字串(搜 "版本 v")
  * BUILD 變動 → CACHE 名稱跟著變 → 觸發 activate 階段刪舊 cache。
  */
-const BUILD = '2026-06-06';            /* 發版日期,改這裡就好 */
-const VERSION = 'v1.3.0';              /* semver,人看得懂的版本 */
+const BUILD = '2026-06-16';            /* 發版日期,改這裡就好 */
+const VERSION = 'v1.4.1';              /* semver,人看得懂的版本 */
 const CACHE = `wondrous-tails-${VERSION}-${BUILD}`;
 const ASSETS = [
   './',
@@ -15,7 +15,7 @@ const ASSETS = [
   'https://cdn.tailwindcss.com',
   'https://unpkg.com/react@18/umd/react.production.min.js',
   'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-  'https://unpkg.com/@babel/standalone/babel.min.js'
+  'https://unpkg.com/@babel/standalone@7.29.7/babel.min.js'
 ];
 
 self.addEventListener('install', e => {
